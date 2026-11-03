@@ -1,0 +1,10 @@
+{
+  "name": "@fdu/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./sqlite": "./src/sqlite.ts",
+    "./indexeddb": "./src/indexeddb.ts"
+  }
+}

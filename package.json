@@ -1,0 +1,39 @@
+{
+  "name": "fdu-agent-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
+  "scripts": {
+    "pwa:build": "node scripts/build-pwa.ts",
+    "pwa:dev": "vite --config apps/pwa/vite.config.ts",
+    "pwa:preview": "vite preview --config apps/pwa/vite.config.ts --port 5174"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
+    "dexie": "4.4.7",
+    "jszip": "3.10.1",
+    "pdfjs-dist": "6.3.289",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.9.0",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "embedded-postgres": "14.24.0-beta.19",
+    "fake-indexeddb": "6.2.7",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
