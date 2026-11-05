@@ -10,7 +10,11 @@ import { SupabaseTransport } from '../../sync/src/supabase.ts';
 import { type Store, type ReplicaState } from '../../sync/src/types.ts';
 import type { TaskPatch } from '../../core/src/task.ts';
 import { learningSchema, emptyLearning, type Learning } from '../../elearning/src/schema.ts';
-import { learningDiagnosticSchema } from '../../elearning/src/schema.ts';
+import {
+  learningImportSchema,
+  type LearningImport,
+  type LearningDiagnostic,
+} from '../../elearning/src/schema.ts';
 import { learningFunctionError } from './elearning.ts';
 
 export const catalogSchema = z.object({
@@ -65,7 +69,6 @@ export class TaskClient {
   private active: Promise<void> | null = null;
   private bound: string | null = null;
   private learningActive: Promise<void> | null = null;
-  private nextLearningAttempt = 0;
   learningError: string | null = null;
   readonly makeStore: (id: string) => Store;
   readonly storage: SupportedStorage;
@@ -310,19 +313,6 @@ export class TaskClient {
       await this.engine.run();
       await this.loadLearning();
       await this.syncLibrary();
-      if (
-        (state.learningEnabled || state.learning?.last_success_at) &&
-        Date.now() >= this.nextLearningAttempt &&
-        !this.learningActive
-      ) {
-        try {
-          await this.fetchLearning();
-          await this.engine.run();
-          await this.loadLearning();
-        } catch (e) {
-          this.learningError = e instanceof Error ? e.message : String(e);
-        }
-      }
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
       throw e;
@@ -339,45 +329,47 @@ export class TaskClient {
         error.code === 'PGRST202'
           ? '云端尚未安装 eLearning 接入，请按接入说明配置。'
           : '课程缓存更新失败，保留上次数据';
-      return;
+      return false;
     }
     const learning = learningSchema.parse(data);
     await this.store.update((s) => Object.assign(s, { learning }));
+    this.learningError = null;
+    return true;
   }
-  private async fetchLearning() {
-    this.nextLearningAttempt = Date.now() + 15 * 60 * 1000;
-    const { data, error } = await this.cloud!.functions.invoke('elearning', {
-      body: {},
-      signal: AbortSignal.timeout(100000),
-    });
-    if (error) {
-      throw await learningFunctionError(error);
-    }
-    this.learningError = data?.partial
-      ? '部分课程或资料读取未完成，保留已有数据；请检查访问权限与资料迁移。'
-      : null;
-    await this.store.update((s) => Object.assign(s, { learningEnabled: true }));
-  }
-  async diagnoseElearning() {
+  async diagnoseElearning(): Promise<LearningDiagnostic> {
     if (!this.cloud || !this.engine || !this.email)
-      throw new Error('请先用同步码连接云端，再运行 eLearning 诊断。');
-    const { data, error } = await this.cloud.functions.invoke('elearning', {
-      body: { action: 'diagnose' },
-      signal: AbortSignal.timeout(30000),
-    });
-    if (error) throw await learningFunctionError(error, true);
-    return learningDiagnosticSchema.parse(data);
+      throw new Error('请先用同步码连接云端，再检查课程缓存。');
+    const ok = await this.loadLearning();
+    return {
+      kind: 'fdu-elearning-diagnostic-v1',
+      checked_at: new Date().toISOString(),
+      region: 'Supabase 课程缓存',
+      ok,
+      code: ok ? 'CACHE_OK' : 'CACHE_READ_FAILED',
+      message: ok
+        ? '云端课程缓存可读取。学校新数据由 Windows 本机读取并同步；电脑关闭时手机只显示已有缓存。'
+        : (this.learningError ?? '课程缓存读取失败，保留上次数据'),
+    };
   }
-  refreshElearning(): Promise<void> {
+  refreshElearningFromDesktop(read: () => Promise<LearningImport>): Promise<void> {
     if (this.learningActive) return this.learningActive;
     if (!this.cloud || !this.engine || !this.email)
       return Promise.reject(new Error('请先用同步码连接云端，再连接 eLearning'));
     this.learningActive = (async () => {
-      this.nextLearningAttempt = Date.now() + 15 * 60 * 1000;
       await this.sync();
-      await this.fetchLearning();
+      const input = learningImportSchema.parse(await read());
+      const { data, error } = await this.cloud!.functions.invoke('elearning', {
+        body: { action: 'import', ...input },
+        signal: AbortSignal.timeout(100000),
+      });
+      if (error) throw await learningFunctionError(error);
       await this.engine!.run();
-      await this.loadLearning();
+      const cacheLoaded = await this.loadLearning();
+      await this.syncLibrary();
+      if (cacheLoaded)
+        this.learningError = data?.partial
+          ? '部分课程或资料读取未完成，保留已有数据；请检查本机读取权限。'
+          : null;
     })()
       .catch((e) => {
         this.learningError = e instanceof Error ? e.message : String(e);
@@ -387,6 +379,9 @@ export class TaskClient {
         this.learningActive = null;
       });
     return this.learningActive;
+  }
+  refreshElearning(): Promise<void> {
+    return this.sync();
   }
   async stageAi(input: unknown) {
     return stageDraft(this.store, input);

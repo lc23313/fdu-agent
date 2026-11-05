@@ -5,12 +5,14 @@ export function NewSchedule({
   title,
   day,
   courses,
+  selectedCourse = '',
   save,
   close,
 }: {
   title: string;
   day: string;
   courses: { id: string; name: string }[];
+  selectedCourse?: string;
   save: (title: string, patch: TaskPatch) => Promise<unknown>;
   close: () => void;
 }) {
@@ -28,11 +30,11 @@ export function NewSchedule({
         className="settings-modal schedule-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="添加日程"
+        aria-label="新建任务"
       >
         <div className="detail-heading">
-          <h2>添加日程</h2>
-          <button onClick={close} aria-label="关闭添加日程">
+          <h2>新建任务</h2>
+          <button onClick={close} aria-label="关闭新建任务">
             ✕
           </button>
         </div>
@@ -61,10 +63,10 @@ export function NewSchedule({
           }}
         >
           <label>
-            日程标题
+            任务标题
             <input
               name="title"
-              aria-label="日程标题"
+              aria-label="任务标题"
               autoFocus
               defaultValue={title}
               placeholder="例如：实验课、提交报告"
@@ -100,7 +102,7 @@ export function NewSchedule({
               <label>
                 日期
                 <input
-                  aria-label="日程日期"
+                  aria-label="任务日期"
                   type="date"
                   value={date}
                   required
@@ -193,8 +195,8 @@ export function NewSchedule({
           )}
           <label>
             课程
-            <select name="course">
-              <option value="">个人日程</option>
+            <select name="course" defaultValue={selectedCourse}>
+              <option value="">个人任务</option>
               {courses.map((c) => (
                 <option value={c.id} key={c.id}>
                   {c.name}
@@ -227,7 +229,7 @@ export function NewSchedule({
             </p>
           )}
           <button className="primary" disabled={busy}>
-            {busy ? '正在保存…' : '保存日程'}
+            {busy ? '正在保存…' : '创建任务'}
           </button>
         </form>
       </section>

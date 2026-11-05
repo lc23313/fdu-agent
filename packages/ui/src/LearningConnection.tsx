@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import type { ClientApi, Snapshot } from '../../client/src/client.ts';
 import { learningErrorMessage, type LearningDiagnostic } from '../../elearning/src/schema.ts';
+import { LearningTokenSetup, type DesktopLearningApi } from './LearningTokenSetup.tsx';
 
 export function LearningConnection({
   api,
   snapshot,
   refresh,
+  desktop,
 }: {
   api: ClientApi;
   snapshot: Snapshot;
   refresh: () => void;
+  desktop?: DesktopLearningApi;
 }) {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<LearningDiagnostic | null>(null);
@@ -27,7 +30,7 @@ export function LearningConnection({
           disabled={!snapshot.connected || snapshot.learningSyncing || busy}
           onClick={refresh}
         >
-          {snapshot.learningSyncing ? '读取中…' : '刷新 eLearning'}
+          {snapshot.learningSyncing ? '读取中…' : desktop ? '本机读取并同步' : '同步课程缓存'}
         </button>
         <button
           disabled={!snapshot.connected || busy || snapshot.learningSyncing}
@@ -35,16 +38,16 @@ export function LearningConnection({
             setBusy(true);
             setError('');
             setReport(null);
-            void api
-              .diagnoseElearning()
+            void (desktop ? desktop.diagnose() : api.diagnoseElearning())
               .then(setReport)
               .catch((e) => setError(e instanceof Error ? e.message : String(e)))
               .finally(() => setBusy(false));
           }}
         >
-          {busy ? '诊断中…' : '连接诊断'}
+          {busy ? '诊断中…' : desktop ? '本机连接诊断' : '缓存连接诊断'}
         </button>
       </div>
+      <LearningTokenSetup desktop={desktop} />
       {!snapshot.connected && <p>先到设置与同步，用同步码连接云端。</p>}
       {message && (
         <p className="notice" role="status">
@@ -58,13 +61,19 @@ export function LearningConnection({
       )}
       {report && (
         <div className="notice" role="status" aria-label="eLearning 诊断结果">
-          <p>电脑／手机 → Supabase：已连接；云端 → 学校 API：{report.ok ? '通过' : '未通过'}。</p>
+          <p>
+            {desktop ? 'Windows 本机 → 学校 API' : '手机／网页 → Supabase 课程缓存'}：
+            {report.ok ? '通过' : '未通过'}。
+          </p>
           <p>{report.message}</p>
           <small>
-            结果：{report.code} · 执行区域：{report.region} ·{' '}
+            结果：{report.code} · 执行位置：{report.region} ·{' '}
             {new Date(report.checked_at).toLocaleString('zh-CN')}
           </small>
-          <p>诊断仅检查学校身份接口，不读取课程、不导入任务。可把以上结果发给我排查。</p>
+          <p>
+            {desktop ? '本机诊断仅检查学校身份接口，不导入任务。' : '缓存诊断不访问学校 API。'}
+            可把以上结果发给我排查。
+          </p>
         </div>
       )}
     </div>

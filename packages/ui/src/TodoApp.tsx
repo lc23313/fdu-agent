@@ -1,4 +1,5 @@
 import { Reminders } from './Reminders.tsx';
+import { moveTaskToDay, scheduledAt } from '../../core/src/schedule.ts';
 import { readBackup } from '../../core/src/backup.ts';
 import { NavIcon } from './NavIcon.tsx';
 import brandIcon from '../../../apps/pwa/public/icon-192.png';
@@ -9,6 +10,7 @@ import { ScheduleOverview, countdown } from './ScheduleOverview.tsx';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { ClientApi, Snapshot } from '../../client/src/client.ts';
 import { LearningConnection } from './LearningConnection.tsx';
+import type { DesktopLearningApi } from './LearningTokenSetup.tsx';
 import type { Task, TaskPatch } from '../../core/src/task.ts';
 import { PlanCalendar, dateKey, occursOn } from './PlanCalendar.tsx';
 import { submissionLabel } from '../../elearning/src/schema.ts';
@@ -294,11 +296,13 @@ export function TodoApp({
   assistant,
   library,
   modelSettings,
+  desktopLearning,
 }: {
   api: ClientApi;
   assistant?: ReactNode;
   library?: ReactNode;
   modelSettings?: ReactNode;
+  desktopLearning?: DesktopLearningApi;
 }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [error, setError] = useState(''),
@@ -317,7 +321,10 @@ export function TodoApp({
     [update, setUpdate] = useState(false),
     [day, setDay] = useState(''),
     [anchor, setAnchor] = useState(() => dateKey(new Date())),
-    [planMode, setPlanMode] = useState(() => localStorage.getItem('fdu-plan-view') || 'list'),
+    [planMode, setPlanMode] = useState(() => {
+      const saved = localStorage.getItem('fdu-plan-view');
+      return saved === 'week' || saved === 'month' ? saved : 'list';
+    }),
     [models, setModels] = useState(false),
     [newSchedule, setNewSchedule] = useState(false);
   const refresh = () =>
@@ -444,7 +451,7 @@ export function TodoApp({
   if (view === 'today') filtered = filtered.filter(isToday);
   if (view === 'upcoming')
     filtered = filtered.filter((t) => {
-      const at = t.due_at ?? t.start_at;
+      const at = scheduledAt(t);
       return (
         at &&
         ((planMode === 'week' || planMode === 'month') && day
@@ -463,6 +470,15 @@ export function TodoApp({
       .toLowerCase()
       .includes(query.toLowerCase());
   filtered = filtered.filter(matches);
+  const completedToday = tasks.filter(
+    (task) =>
+      task.status === 'completed' &&
+      task.completed_at &&
+      dateKey(task.completed_at) === today &&
+      matches(task),
+  );
+  const plannedDay =
+    view === 'upcoming' && (planMode === 'week' || planMode === 'month') && day ? day : today;
   filtered.sort((a, b) =>
     sort === 'priority'
       ? b.priority - a.priority
@@ -474,10 +490,8 @@ export function TodoApp({
             ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
             : (a.due_at ?? 'z').localeCompare(b.due_at ?? 'z') || b.priority - a.priority,
   );
-  if (view === 'upcoming')
-    filtered.sort((a, b) =>
-      (a.due_at ?? a.start_at ?? '').localeCompare(b.due_at ?? b.start_at ?? ''),
-    );
+  if (view === 'upcoming' && sort === 'due')
+    filtered.sort((a, b) => (scheduledAt(a) ?? '').localeCompare(scheduledAt(b) ?? ''));
   if (view === 'today')
     filtered.sort(
       (a, b) =>
@@ -710,7 +724,12 @@ export function TodoApp({
             snapshot={snapshot}
             selectTask={setSelected}
             library={library}
-            refresh={() => void run(() => api.refreshElearning()).catch(() => {})}
+            refresh={() =>
+              void run(() =>
+                desktopLearning ? desktopLearning.refresh() : api.refreshElearning(),
+              ).catch(() => {})
+            }
+            desktopLearning={desktopLearning}
             add={(name) =>
               run(() =>
                 api.catalog({
@@ -760,8 +779,8 @@ export function TodoApp({
                   ...(view === 'today'
                     ? { start_at: new Date(`${today}T09:00:00`).toISOString() }
                     : {}),
-                  ...(view === 'upcoming' && day
-                    ? { due_at: new Date(`${day}T18:00:00`).toISOString() }
+                  ...(view === 'upcoming'
+                    ? { due_at: new Date(`${plannedDay}T23:59:00`).toISOString() }
                     : {}),
                 })
                   .then(() => setTitle(''))
@@ -772,7 +791,13 @@ export function TodoApp({
               <input
                 id="quick-task"
                 aria-label="新任务标题"
-                placeholder="添加任务，给想法一个落点…"
+                placeholder={
+                  view === 'today'
+                    ? '今天要做什么？'
+                    : view === 'upcoming'
+                      ? `添加到 ${plannedDay}…`
+                      : '先记下来，稍后安排…'
+                }
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -780,18 +805,18 @@ export function TodoApp({
               />
               <button className="primary">添加</button>
               <button type="button" onClick={() => setNewSchedule(true)}>
-                安排日程
+                详细添加
               </button>
             </form>
             {view === 'upcoming' && (
               <>
+                <p className="subtitle">同一批任务，按时间查看。列表看待办，周历／月历排时间。</p>
                 <div className="view-tabs" aria-label="计划视图">
                   {(
                     [
                       ['list', '列表'],
                       ['week', '周历'],
                       ['month', '月历'],
-                      ['countdown', '倒计时'],
                     ] as const
                   ).map(([id, label]) => (
                     <button
@@ -814,13 +839,14 @@ export function TodoApp({
                     day={day}
                     tasks={incomplete.filter(matches)}
                     select={setDay}
-                    move={setAnchor}
+                    move={(value) => {
+                      setAnchor(value);
+                      setDay('');
+                    }}
                     open={setSelected}
                     drop={(id, key) => {
-                      if (tasks.some((t) => t.id === id))
-                        void save(id, { due_at: new Date(`${key}T18:00:00`).toISOString() }).catch(
-                          () => {},
-                        );
+                      const task = tasks.find((t) => t.id === id);
+                      if (task) void save(id, moveTaskToDay(task, key)).catch(() => {});
                     }}
                   />
                 )}
@@ -884,15 +910,34 @@ export function TodoApp({
                 ))}
               </select>
               <select aria-label="排序" value={sort} onChange={(e) => setSort(e.target.value)}>
-                <option value="due">截止时间</option>
+                <option value="due">{view === 'upcoming' ? '安排时间' : '截止时间'}</option>
                 <option value="priority">优先级</option>
                 <option value="title">标题</option>
                 <option value="created">创建时间</option>
                 <option value="completed">完成时间</option>
               </select>
+              {(query || course || priority || source || status || tag) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setCourse('');
+                    setPriority('');
+                    setSource('');
+                    setStatus('');
+                    setTag('');
+                  }}
+                >
+                  清除筛选
+                </button>
+              )}
             </div>
             <div className="list-heading">
-              <span>{day || '任务清单'}</span>
+              <span>
+                {view === 'upcoming' && (planMode === 'week' || planMode === 'month')
+                  ? day || '未来任务'
+                  : '任务清单'}
+              </span>
               <small>{filtered.length} 项</small>
             </div>
             {filtered.length > 0 && (
@@ -925,20 +970,18 @@ export function TodoApp({
                 <div className="task-group" key={t.id}>
                   {view === 'upcoming' &&
                     planMode === 'list' &&
+                    sort === 'due' &&
                     (index === 0 ||
-                      dateKey(filtered[index - 1]!.due_at ?? filtered[index - 1]!.start_at!) !==
-                        dateKey(t.due_at ?? t.start_at!)) && (
+                      dateKey(scheduledAt(filtered[index - 1]!)!) !== dateKey(scheduledAt(t)!)) && (
                       <h3 className="date-group">
-                        {dateKey(t.due_at ?? t.start_at!) === today
+                        {dateKey(scheduledAt(t)!) === today
                           ? '今天'
-                          : dateKey(t.due_at ?? t.start_at!) ===
-                              dateKey(new Date(Date.now() + 86400000))
+                          : dateKey(scheduledAt(t)!) === dateKey(new Date(Date.now() + 86400000))
                             ? '明天'
-                            : new Date(t.due_at ?? t.start_at!).getTime() <
-                                Date.now() + 7 * 86400000
+                            : new Date(scheduledAt(t)!).getTime() < Date.now() + 7 * 86400000
                               ? '未来 7 天'
                               : '更远的未来'}{' '}
-                        · {dateKey(t.due_at ?? t.start_at!)}
+                        · {dateKey(scheduledAt(t)!)}
                       </h3>
                     )}
                   {view === 'today' &&
@@ -980,8 +1023,26 @@ export function TodoApp({
                         {officialDue(t) &&
                           ` · 官方截止 ${new Date(officialDue(t)!).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                         {t.status === 'in_progress' ? ' · 进行中' : ''}
+                        {t.start_at && t.due_at && (
+                          <span className="task-time">
+                            {new Date(t.start_at).toLocaleTimeString('zh-CN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            –
+                            {new Date(t.due_at).toLocaleTimeString('zh-CN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {dateKey(t.start_at) !== dateKey(t.due_at) ? ' · 跨天' : ''}
+                            {new Date(t.start_at).getTime() <= Date.now() &&
+                            new Date(t.due_at).getTime() > Date.now()
+                              ? ' · 正在进行'
+                              : ''}
+                          </span>
+                        )}
                         {t.tags.map((tag) => ` · #${tag}`).join('')}
-                        {view === 'upcoming' && planMode === 'countdown' && t.due_at && (
+                        {view === 'upcoming' && t.due_at && (
                           <b className="countdown">{countdown(t.due_at)}</b>
                         )}
                       </small>
@@ -989,14 +1050,15 @@ export function TodoApp({
                     <input
                       type="date"
                       className={`due ${t.due_at && dateKey(t.due_at) < today && t.status !== 'completed' ? 'overdue' : ''}`}
-                      aria-label={`截止日期 ${t.title}`}
-                      value={t.due_at ? dateKey(t.due_at) : ''}
+                      aria-label={`安排日期 ${t.title}`}
+                      title="改期会保留原来的时刻和时长；清空日期会移回收集箱"
+                      value={scheduledAt(t) ? dateKey(scheduledAt(t)!) : ''}
                       onChange={(e) => {
                         const date = e.target.value;
-                        const time = t.due_at ? localTime(t.due_at).slice(11) : '18:00';
-                        void save(t.id, {
-                          due_at: date ? new Date(`${date}T${time}`).toISOString() : null,
-                        }).catch(() => {});
+                        void save(
+                          t.id,
+                          date ? moveTaskToDay(t, date) : { start_at: null, due_at: null },
+                        ).catch(() => {});
                       }}
                     />
                   </div>
@@ -1014,6 +1076,28 @@ export function TodoApp({
                 </div>
               )}
             </section>
+            {view === 'today' && completedToday.length > 0 && (
+              <details className="today-completed" open>
+                <summary>今天已完成 · {completedToday.length} 项</summary>
+                {completedToday.map((task) => (
+                  <div className="task-row" key={task.id}>
+                    <input
+                      type="checkbox"
+                      checked
+                      aria-label={`撤销完成 ${task.title}`}
+                      onChange={() => void save(task.id, { status: 'todo' }).catch(() => {})}
+                    />
+                    <button className="task-open" onClick={() => setSelected(task.id)}>
+                      <span className="done">{task.title}</span>
+                      <small>
+                        {courses.find((c) => c.id === task.course_id)?.name ?? '个人任务'} ·
+                        今天完成
+                      </small>
+                    </button>
+                  </div>
+                ))}
+              </details>
+            )}
           </>
         )}
         <footer>本机优先保存 · 重要的事，稳稳记住</footer>
@@ -1021,8 +1105,9 @@ export function TodoApp({
       {newSchedule && (
         <NewSchedule
           title={title}
-          day={day}
+          day={view === 'upcoming' ? plannedDay : ''}
           courses={courses}
+          selectedCourse={course}
           save={(title, patch) =>
             create(title, patch).then((result) => {
               setTitle('');
@@ -1159,15 +1244,17 @@ export function TodoApp({
             </section>
             <section className="elearning-settings">
               <h3>eLearning 连接</h3>
-              <p>只读连接复旦平台。Token 通过服务端秘密配置，不在此输入或保存。</p>
-              <p>
-                读取由 Supabase 云端执行。学校网页能在本机打开，不代表云端 API
-                可达。两次刷新至少间隔一分钟。
-              </p>
+              <p>Windows 本机只读获取学校数据，再同步到本人云端。手机使用已同步的课程缓存。</p>
+              <p>电脑关闭时手机不拉取学校新数据。两次本机读取至少间隔一分钟。</p>
               <LearningConnection
                 api={api}
                 snapshot={snapshot}
-                refresh={() => void run(() => api.refreshElearning()).catch(() => {})}
+                refresh={() =>
+                  void run(() =>
+                    desktopLearning ? desktopLearning.refresh() : api.refreshElearning(),
+                  ).catch(() => {})
+                }
+                desktop={desktopLearning}
               />
             </section>
             {modelSettings && (

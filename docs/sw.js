@@ -1,8 +1,8 @@
 
-const CACHE="fdu-%2Ffdu-agent%2F-4bf3f644e1d9b113";
+const CACHE="fdu-%2Ffdu-agent%2F-8e1c4602eb9e6329";
 const PREFIX="fdu-%2Ffdu-agent%2F-";
 const BASE="/fdu-agent/";
-const FILES=["/fdu-agent/","/fdu-agent/index.html","/fdu-agent/manifest.webmanifest","/fdu-agent/icon-192.png","/fdu-agent/icon-512.png","/fdu-agent/assets/Library-BJKtlxuW.js","/fdu-agent/assets/Library-DhiUHxRI.js","/fdu-agent/assets/drafts-B1gq7WQq.js","/fdu-agent/assets/drafts-DxbTkVHM.js","/fdu-agent/assets/icon-192-DDBZ97AY.png","/fdu-agent/assets/index-BLwalCjk.js","/fdu-agent/assets/index-W6Lhsmhj.css","/fdu-agent/assets/iso-2bwjAcwl.js","/fdu-agent/assets/jszip.min-Du9ITKYx.js","/fdu-agent/assets/pdf-CyczeqB8.js","/fdu-agent/assets/pdf.worker.min-DggqbW7C.js","/fdu-agent/assets/pdf.worker.min-Dswkl-cV.mjs","/fdu-agent/assets/rolldown-runtime-pP25SEvz.js"];
+const FILES=["/fdu-agent/","/fdu-agent/index.html","/fdu-agent/manifest.webmanifest","/fdu-agent/icon-192.png","/fdu-agent/icon-512.png","/fdu-agent/assets/Library-BJKtlxuW.js","/fdu-agent/assets/Library-DhiUHxRI.js","/fdu-agent/assets/drafts-B1gq7WQq.js","/fdu-agent/assets/drafts-DxbTkVHM.js","/fdu-agent/assets/icon-192-DDBZ97AY.png","/fdu-agent/assets/index-DrBEIO97.js","/fdu-agent/assets/index-vUKYrAh6.css","/fdu-agent/assets/iso-2bwjAcwl.js","/fdu-agent/assets/jszip.min-Du9ITKYx.js","/fdu-agent/assets/pdf-CyczeqB8.js","/fdu-agent/assets/pdf.worker.min-DggqbW7C.js","/fdu-agent/assets/pdf.worker.min-Dswkl-cV.mjs","/fdu-agent/assets/rolldown-runtime-pP25SEvz.js"];
 self.addEventListener('install',event=>{
  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)));
 });

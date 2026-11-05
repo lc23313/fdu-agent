@@ -277,6 +277,21 @@
   padding: 16px 0;
   border-bottom: 1px solid var(--fdu-line);
 }
+.today-completed {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--fdu-line);
+}
+.today-completed summary {
+  cursor: pointer;
+  color: var(--fdu-dim);
+  margin-bottom: 12px;
+}
+.task-time {
+  display: block;
+  color: var(--fdu-accent);
+  margin-top: 3px;
+}
 .task-open {
   border: 0 !important;
   background: transparent !important;
@@ -850,6 +865,18 @@ body:has(.fdu-app) {
   flex-basis: 100%;
   overflow-wrap: anywhere;
 }
+.learning-token-setup {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+.learning-token-setup summary {
+  cursor: pointer;
+  color: var(--fdu-accent);
+}
+.learning-token-setup p,
+.learning-token-setup li {
+  margin: 8px 0 !important;
+}
 .elearning-settings {
   margin: 20px 0;
   padding-top: 14px;
@@ -1189,13 +1216,18 @@ body:has(.fdu-app) {
 }
 @media (max-width: 650px) {
   .quick-add {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .quick-add > span {
+    display: none;
   }
   .quick-add input {
-    flex-basis: 60%;
+    grid-column: 1 / -1;
+    width: 100%;
   }
   .quick-add button {
-    flex: 1;
+    white-space: nowrap;
   }
   .file-row {
     flex-wrap: wrap;

@@ -1,5 +1,6 @@
 import { Library } from './Library.tsx';
 import { LearningConnection } from './LearningConnection.tsx';
+import type { DesktopLearningApi } from './LearningTokenSetup.tsx';
 import type { ClientApi } from '../../client/src/client.ts';
 import { useState, type ReactNode } from 'react';
 import type { Snapshot } from '../../client/src/client.ts';
@@ -12,6 +13,7 @@ export function Courses({
   refresh,
   api,
   reload,
+  desktopLearning,
 }: {
   snapshot: Snapshot;
   add: (name: string) => Promise<unknown>;
@@ -20,6 +22,7 @@ export function Courses({
   refresh: () => void;
   api: ClientApi;
   reload: () => Promise<unknown>;
+  desktopLearning?: DesktopLearningApi;
 }) {
   const [section, setSection] = useState('courses'),
     [course, setCourse] = useState(''),
@@ -44,7 +47,12 @@ export function Courses({
           资料库
         </button>
       </div>
-      <LearningConnection api={api} snapshot={snapshot} refresh={refresh} />
+      <LearningConnection
+        api={api}
+        snapshot={snapshot}
+        refresh={refresh}
+        desktop={desktopLearning}
+      />
       {section === 'library' ? (
         <>
           <p className="subtitle">跨课程资料统一查看，课程内的资料使用同一文件记录。</p>

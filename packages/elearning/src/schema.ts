@@ -1,18 +1,19 @@
 import { z } from 'zod';
 export const canvasOrigin = 'https://elearning.fudan.edu.cn';
 export function learningErrorMessage(code: string): string {
+  if (code === 'TOKEN_EXPIRED' || code === 'AUTH_REJECTED')
+    return '学校 API 拒绝了当前请求的认证（401），不能据此判断 Token 已过期。请用同一 Token 做本机参考验证，并核对本机保存的完整 Token。';
   return (
     {
-      NETWORK_ERROR:
-        'Supabase 云端无法连接复旦 eLearning。请运行连接诊断；电脑能打开学校网页不代表云端可访问。',
-      DNS_ERROR: 'Supabase 云端无法解析复旦 eLearning 域名。请运行连接诊断并查看云端网络情况。',
-      TLS_ERROR:
-        'Supabase 云端与复旦 eLearning 的 HTTPS 连接失败。请检查云端日志；不要关闭证书校验。',
+      NETWORK_ERROR: '无法连接复旦 eLearning，请检查本机网络并运行本机连接诊断。',
+      DNS_ERROR: '无法解析复旦 eLearning 域名，请检查本机网络。',
+      TLS_ERROR: '与复旦 eLearning 的 HTTPS 连接失败，请检查本机网络；不要关闭证书校验。',
       REQUEST_TIMEOUT:
-        'Supabase 云端读取复旦 eLearning 超时。请稍后重试，并用连接诊断检查学校 API 是否可达。',
+        '读取复旦 eLearning 超时。请稍后重试，并用本机连接诊断检查学校 API 是否可达。',
       REDIRECTED:
         '学校 API 返回了跳转，未继续发送 Token。请用连接诊断检查；网页登录成功不能代替 API 认证。',
-      TOKEN_EXPIRED: 'eLearning Token 无效或已过期，请更新服务端 FDU_CANVAS_TOKEN 后重试。',
+      TOKEN_CONFIG_INVALID:
+        'eLearning Token 配置格式不正确：请填写原始 Token，去掉 Bearer 前缀及包裹的引号。',
       FORBIDDEN: '学校 API 拒绝访问（403）。请核对 Token 的读取权限和学校当前访问限制。',
       RATE_LIMITED: '学校 API 暂时限制访问，请等待后再刷新，不要连续点击。',
       CONNECTOR_DATABASE_ERROR:
@@ -30,6 +31,13 @@ export const learningDiagnosticSchema = z.object({
   ok: z.boolean(),
   code: z.string().max(200),
   message: z.string().max(1000),
+  auth_evidence: z
+    .object({
+      http_status: z.number().int(),
+      challenge_present: z.boolean(),
+      response_type: z.enum(['json', 'html', 'other']),
+    })
+    .optional(),
 });
 export type LearningDiagnostic = z.infer<typeof learningDiagnosticSchema>;
 const stamp = z.iso.datetime({ offset: true });
@@ -52,6 +60,26 @@ export const courseImportSchema = z.object({
   error: z.string().max(200).nullable(),
 });
 export type CourseImport = z.infer<typeof courseImportSchema>;
+export const materialImportSchema = z
+  .strictObject({
+    external_id: z.string().regex(/^\d+$/),
+    course_external_id: z.string().regex(/^\d+$/),
+    name: z.string().min(1).max(200),
+    size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    official_url: z.url(),
+  })
+  .refine(
+    (v) =>
+      v.official_url === `${canvasOrigin}/courses/${v.course_external_id}/files/${v.external_id}`,
+    '资料链接必须指向对应的复旦官方文件',
+  );
+export const learningImportSchema = z.strictObject({
+  identity: z.string().regex(/^\d+$/),
+  courses: z.array(courseImportSchema).max(200),
+  materials: z.array(materialImportSchema).max(5000).default([]),
+  materials_partial: z.boolean().default(false),
+});
+export type LearningImport = z.infer<typeof learningImportSchema>;
 export const learningSchema = z.object({
   courses: z.array(
     z.object({

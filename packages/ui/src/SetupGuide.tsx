@@ -97,13 +97,13 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
         <li>
           <b>连接 eLearning {snapshot.learning.last_success_at ? '✓' : ''}</b>
           <p>
-            在 eLearning → 账户 → 设置生成访问 Token。在 Supabase 的 Edge Function Secrets 设置
-            FDU_CANVAS_TOKEN，以及同步空间固定标识 FDU_OWNER_ID，然后部署项目中的 elearning
-            函数。完成后点“连接／刷新 eLearning”。
+            在 Windows 客户端下方“配置／更换本机 eLearning Token”保存学校
+            Token，点击本机读取并同步。
+            手机使用同一个同步空间，只更新已同步的课程缓存。电脑关闭时不会拉取学校新数据。
           </p>
         </li>
       </ol>
-      <p>本机 Token 验证成功只说明学校接口可用；完成云端配置后，课程才会进入应用。</p>
+      <p>本机 Token 诊断成功后，需要点击“本机读取并同步”，课程和作业才会更新到云端及手机。</p>
       <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">
         打开 Supabase 后台 ↗
       </a>{' '}
