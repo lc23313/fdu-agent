@@ -3,6 +3,7 @@ import { TaskClient } from '../../../packages/client/src/client.ts';
 import { IndexedDbStore } from '../../../packages/storage/src/indexeddb.ts';
 import { TodoApp } from '../../../packages/ui/src/TodoApp.tsx';
 import '../../../packages/ui/src/style.css';
+import '../../../packages/ui/src/refinement.css';
 let id = localStorage.getItem('fdu-local-id');
 if (!id) {
   id = crypto.randomUUID();
@@ -25,6 +26,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker
     .register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL })
     .then((reg) => {
+      if (reg.waiting && navigator.serviceWorker.controller)
+        window.dispatchEvent(new Event('fdu-update'));
       reg.addEventListener('updatefound', () => {
         const worker = reg.installing;
         worker?.addEventListener('statechange', () => {

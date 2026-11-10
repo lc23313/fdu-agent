@@ -57,6 +57,7 @@ export interface Transport {
   pull(cursor: string): Promise<ChangePage>;
 }
 export interface Store {
+  revision?(): Promise<number>;
   read(): Promise<ReplicaState>;
   update<T>(fn: (state: ReplicaState) => T): Promise<T>;
   close(): void;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 export const canvasOrigin = 'https://elearning.fudan.edu.cn';
 export function learningErrorMessage(code: string): string {
   if (code === 'TOKEN_EXPIRED' || code === 'AUTH_REJECTED')
-    return '学校 API 拒绝了当前请求的认证（401），不能据此判断 Token 已过期。请用同一 Token 做本机参考验证，并核对本机保存的完整 Token。';
+    return 'eLearning 未接受当前登录会话（401）。请在 Windows 点击“登录复旦 UIS”重新登录，再读取课程。';
   return (
     {
       NETWORK_ERROR: '无法连接复旦 eLearning，请检查本机网络并运行本机连接诊断。',
@@ -11,10 +11,10 @@ export function learningErrorMessage(code: string): string {
       REQUEST_TIMEOUT:
         '读取复旦 eLearning 超时。请稍后重试，并用本机连接诊断检查学校 API 是否可达。',
       REDIRECTED:
-        '学校 API 返回了跳转，未继续发送 Token。请用连接诊断检查；网页登录成功不能代替 API 认证。',
-      TOKEN_CONFIG_INVALID:
-        'eLearning Token 配置格式不正确：请填写原始 Token，去掉 Bearer 前缀及包裹的引号。',
-      FORBIDDEN: '学校 API 拒绝访问（403）。请核对 Token 的读取权限和学校当前访问限制。',
+        'eLearning 要求跳转登录。请在 Windows 完成 UIS 登录并进入 eLearning，再读取课程。',
+      LOGIN_REQUIRED: 'eLearning 返回了登录页面。请在 Windows 点击“登录复旦 UIS”完成登录。',
+      TOKEN_CONFIG_INVALID: '旧版学校认证配置已停用。请在 Windows 通过复旦 UIS 登录。',
+      FORBIDDEN: '学校拒绝访问（403）。请确认已登录、具有对应课程权限，或运行本机诊断。',
       RATE_LIMITED: '学校 API 暂时限制访问，请等待后再刷新，不要连续点击。',
       CONNECTOR_DATABASE_ERROR:
         '云端课程数据读写失败，请检查 003 迁移及 elearning 函数日志；保留已有数据。',
@@ -62,15 +62,22 @@ export const courseImportSchema = z.object({
 export type CourseImport = z.infer<typeof courseImportSchema>;
 export const materialImportSchema = z
   .strictObject({
-    external_id: z.string().regex(/^\d+$/),
+    external_id: z.string().regex(/^(?:announcement-)?\d+$/),
     course_external_id: z.string().regex(/^\d+$/),
     name: z.string().min(1).max(200),
     size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     official_url: z.url(),
+    kind: z.literal('announcement').optional(),
+    description: z.string().max(12000).optional(),
+    posted_at: stamp.nullable().optional(),
   })
   .refine(
     (v) =>
-      v.official_url === `${canvasOrigin}/courses/${v.course_external_id}/files/${v.external_id}`,
+      v.kind === 'announcement'
+        ? v.official_url ===
+          `${canvasOrigin}/courses/${v.course_external_id}/discussion_topics/${v.external_id.replace('announcement-', '')}`
+        : v.official_url ===
+          `${canvasOrigin}/courses/${v.course_external_id}/files/${v.external_id}`,
     '资料链接必须指向对应的复旦官方文件',
   );
 export const learningImportSchema = z.strictObject({

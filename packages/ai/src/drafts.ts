@@ -12,10 +12,12 @@ export const proposalSchema = z
           z
             .object({
               action: z.literal('create'),
+              local_id: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+              parent_ref: z.string().max(80).optional(),
               patch: taskPatchSchema.refine((p) => !!p.title, '新任务必须有标题'),
             })
             .strict(),
-          z.object({ action: z.literal('patch'), id: z.uuid(), patch: taskPatchSchema }).strict(),
+          z.object({ action: z.literal('patch'), id: z.uuid(), patch: taskPatchSchema, parent_ref: z.string().max(80).optional() }).strict(),
           z.object({ action: z.literal('delete'), id: z.uuid() }).strict(),
         ]),
       )
@@ -27,7 +29,8 @@ export type Draft = {
   id: string;
   proposal: Proposal;
   base: Record<string, Task>;
-  status: 'pending' | 'applied' | 'cancelled';
+  status: 'pending' | 'applied' | 'cancelled' | 'undone';
+  applied?: Record<string, Task | null>;
   created_at: string;
 };
 export type AiState = ReplicaState & {
@@ -66,17 +69,20 @@ export async function stageDraft(store: Store, input: unknown) {
     return draft;
   });
 }
-export async function decideDraft(store: Store, id: string, confirm: boolean) {
+export async function decideDraft(store: Store, id: string, confirm: boolean, edited?: unknown) {
   return store.update((s) => {
     const state = s as AiState;
     const draft = state.aiDrafts?.find((d) => d.id === id);
     if (!draft) throw new Error('草稿不存在');
     if (draft.status === 'applied') return;
     if (draft.status === 'cancelled') throw new Error('草稿已放弃');
+    if (draft.status === 'undone') throw new Error('此草稿已撤销，请重新生成');
     if (!confirm) {
       draft.status = 'cancelled';
       return;
     }
+    const proposal = edited === undefined ? draft.proposal : proposalSchema.parse(edited);
+    if (proposal.operations.some((op) => op.action !== 'create' && !draft.base[op.id])) throw new Error('编辑草稿不能引用预览之外的任务，请重新生成');
     for (const [taskId, base] of Object.entries(draft.base))
       if (
         JSON.stringify(projectTask(state, taskId)) !== JSON.stringify(base) ||
@@ -84,14 +90,31 @@ export async function decideDraft(store: Store, id: string, confirm: boolean) {
       )
         throw new Error('任务已发生变化，请重新生成草稿');
     const created: string[] = [];
-    for (const op of draft.proposal.operations) {
-      const entity = op.action === 'create' ? crypto.randomUUID() : op.id;
+    const refs = new Map<string, string>();
+    for (const op of proposal.operations) if (op.action === 'create' && op.local_id) {
+      if (refs.has(op.local_id)) throw new Error('草稿临时标识重复');
+      refs.set(op.local_id, crypto.randomUUID());
+    }
+    const remaining = [...proposal.operations];
+    const ordered: typeof remaining = [];
+    const done = new Set<string>();
+    while (remaining.length) {
+      const index = remaining.findIndex((op) => !('parent_ref' in op) || !op.parent_ref || done.has(op.parent_ref));
+      if (index < 0) throw new Error('子任务引用不存在或形成循环');
+      const op = remaining.splice(index, 1)[0]!; ordered.push(op);
+      if (op.action === 'create' && op.local_id) done.add(op.local_id);
+    }
+    for (const op of ordered) {
+      const entity = op.action === 'create' ? (op.local_id ? refs.get(op.local_id)! : crypto.randomUUID()) : op.id;
       const patch =
         op.action === 'create'
           ? { ...newTaskFields(op.patch.title!), ...op.patch }
           : op.action === 'patch'
             ? op.patch
             : undefined;
+      if (patch && 'parent_ref' in op && op.parent_ref) {
+        const parent = refs.get(op.parent_ref); if (!parent) throw new Error('新父任务引用不存在'); patch.parent_id = parent;
+      }
       if (
         patch?.course_id &&
         ![
@@ -113,6 +136,7 @@ export async function decideDraft(store: Store, id: string, confirm: boolean) {
       });
       if (op.action === 'create') created.push(entity);
     }
+    draft.proposal = proposal;
     const ids = new Set([...Object.keys(state.shadow), ...state.pending.map((p) => p.entity_id)]);
     for (const taskId of ids) {
       let t = projectTask(state, taskId);
@@ -139,5 +163,22 @@ export async function decideDraft(store: Store, id: string, confirm: boolean) {
       state.catalogDirty = true;
     }
     draft.status = 'applied';
+    draft.applied = Object.fromEntries([...created,...Object.keys(draft.base)].map((id)=>[id,projectTask(state,id)]));
+  });
+}
+export async function undoDraft(store:Store,id:string) {
+  return store.update((s)=>{
+    const state=s as AiState,draft=state.aiDrafts?.find((d)=>d.id===id);
+    if(!draft||draft.status!=='applied'||!draft.applied)throw new Error('此批变更已经不能撤销');
+    const fields=Object.keys(newTaskFields('x')).concat(['time_kind','repeat']);
+    for(const [key,after] of Object.entries(draft.applied)){
+      const current=projectTask(state,key);
+      if(!current||!after||!!current.deleted_at!==!!after.deleted_at||fields.some((f)=>JSON.stringify(current[f as keyof Task]??null)!==JSON.stringify(after[f as keyof Task]??null)))throw new Error('任务后来又有变更，请手动核对，未执行撤销');
+    }
+    for(const [key,after] of Object.entries(draft.applied)){
+      const before=draft.base[key];
+      state.pending.push({local_id:crypto.randomUUID(),entity_id:key,action:!before?'delete':after?.deleted_at?'restore':'patch',...(before&&!after?.deleted_at?{patch:Object.fromEntries(fields.filter((f)=>f in before).map((f)=>[f,before[f as keyof Task]]))}:{}),base:state.shadow[key]??null,request:null,created_at:new Date().toISOString(),blocked:false});
+    }
+    draft.status='undone';
   });
 }

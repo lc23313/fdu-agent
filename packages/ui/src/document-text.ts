@@ -51,3 +51,23 @@ export async function documentText(name: string, bytes: Uint8Array): Promise<str
   }
   return '';
 }
+export async function renderPdfPage(bytes: Uint8Array, page: number): Promise<string> {
+  const pdfjs = await import('pdfjs-dist');
+  const { default: worker } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
+  pdfjs.GlobalWorkerOptions.workerSrc = worker;
+  const loading = pdfjs.getDocument({ data: bytes.slice() });
+  const doc = await loading.promise;
+  try {
+    if (page > doc.numPages) throw new Error(`只有 ${doc.numPages} 页`);
+    const p = await doc.getPage(page);
+    const raw = p.getViewport({ scale: 1 });
+    const viewport = p.getViewport({ scale: Math.min(2, 1800 / raw.width) });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await p.render({ canvas, viewport }).promise;
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } finally {
+    await loading.destroy();
+  }
+}

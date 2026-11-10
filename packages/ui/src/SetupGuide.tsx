@@ -7,6 +7,9 @@ import catalogSql from '../../../supabase/migrations/202610310002_personal_catal
 import learningSql from '../../../supabase/migrations/202610310003_elearning.sql?raw';
 import syncSql from '../../../supabase/migrations/202610310005_sync_code.sql?raw';
 import aiSql from '../../../supabase/migrations/202610310004_ai_quota.sql?raw';
+import experienceSql from '../../../supabase/migrations/202611060007_experience.sql?raw';
+import pushSql from '../../../supabase/migrations/202611060008_push.sql?raw';
+import cleanupSql from '../../../supabase/migrations/202611060009_file_cleanup.sql?raw';
 export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
   const [script, setScript] = useState('001'),
     [message, setMessage] = useState('');
@@ -18,6 +21,9 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
       '004': aiSql,
       '005': syncSql,
       '006': librarySql,
+      '007': experienceSql,
+      '008': pushSql,
+      '009': cleanupSql,
       Storage: storageSql,
     } as Record<string, string>
   )[script]!;
@@ -53,6 +59,9 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
                 ['004', 'AI配额'],
                 ['005', '同步码连接'],
                 ['006', '资料元数据'],
+                ['007', '时间、重复与资料版本'],
+                ['008', '个人设备推送（按需）'],
+                ['009', '本人私有文件清理（按需）'],
                 ['Storage', '私有文件存储（按需）'],
               ].map(([id, label]) => (
                 <option value={id} key={id}>
@@ -97,13 +106,12 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
         <li>
           <b>连接 eLearning {snapshot.learning.last_success_at ? '✓' : ''}</b>
           <p>
-            在 Windows 客户端下方“配置／更换本机 eLearning Token”保存学校
-            Token，点击本机读取并同步。
+            在 Windows 的“学校连接”中点击“登录复旦 UIS”，在官方页面完成登录，再点击本机读取并同步。
             手机使用同一个同步空间，只更新已同步的课程缓存。电脑关闭时不会拉取学校新数据。
           </p>
         </li>
       </ol>
-      <p>本机 Token 诊断成功后，需要点击“本机读取并同步”，课程和作业才会更新到云端及手机。</p>
+      <p>UIS 登录验证成功后，点击“本机读取并同步”，课程和作业才会更新到云端及手机。</p>
       <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">
         打开 Supabase 后台 ↗
       </a>{' '}

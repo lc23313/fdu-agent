@@ -19,6 +19,13 @@ export class SqliteStore implements Store {
     db.exec(
       'CREATE TABLE IF NOT EXISTS fdu_replica_state (user_id TEXT PRIMARY KEY, data TEXT NOT NULL)',
     );
+    const column = db
+      .prepare(
+        "SELECT count(*) AS n FROM pragma_table_info('fdu_replica_state') WHERE name='revision'",
+      )
+      .get() as { n: number };
+    if (!column.n)
+      db.exec('ALTER TABLE fdu_replica_state ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
     db.prepare('INSERT OR IGNORE INTO fdu_replica_state(user_id,data) VALUES (?,?)').run(
       userId,
       JSON.stringify(emptyState(userId)),
@@ -27,6 +34,13 @@ export class SqliteStore implements Store {
   }
   async read(): Promise<ReplicaState> {
     return this.load();
+  }
+  async revision(): Promise<number> {
+    return (
+      this.db
+        .prepare('SELECT revision FROM fdu_replica_state WHERE user_id=?')
+        .get(this.userId) as { revision: number }
+    ).revision;
   }
   private load(): ReplicaState {
     const row = this.db
@@ -40,7 +54,7 @@ export class SqliteStore implements Store {
       const state = this.load();
       const result = fn(state);
       this.db
-        .prepare('UPDATE fdu_replica_state SET data=? WHERE user_id=?')
+        .prepare('UPDATE fdu_replica_state SET data=?,revision=revision+1 WHERE user_id=?')
         .run(JSON.stringify(state), this.userId);
       this.db.exec('COMMIT');
       return result;

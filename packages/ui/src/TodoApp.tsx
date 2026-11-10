@@ -1,296 +1,26 @@
-import { Reminders } from './Reminders.tsx';
-import { moveTaskToDay, scheduledAt } from '../../core/src/schedule.ts';
-import { readBackup } from '../../core/src/backup.ts';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ClientApi, Snapshot } from '../../client/src/client.ts';
+import type { Task, TaskPatch } from '../../core/src/task.ts';
+import { dayKey, inPlan, isOverdue, moveTaskToDay, scheduledAt } from '../../core/src/schedule.ts';
 import { NavIcon } from './NavIcon.tsx';
 import brandIcon from '../../../apps/pwa/public/icon-192.png';
-import { NewSchedule } from './NewSchedule.tsx';
-import { AiAssistant, DraftReview } from './AiAssistant.tsx';
-import { SetupGuide } from './SetupGuide.tsx';
-import { ScheduleOverview, countdown } from './ScheduleOverview.tsx';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import type { ClientApi, Snapshot } from '../../client/src/client.ts';
-import { LearningConnection } from './LearningConnection.tsx';
-import type { DesktopLearningApi } from './LearningTokenSetup.tsx';
-import type { Task, TaskPatch } from '../../core/src/task.ts';
-import { PlanCalendar, dateKey, occursOn } from './PlanCalendar.tsx';
-import { submissionLabel } from '../../elearning/src/schema.ts';
+import { PlanCalendar, occursOn } from './PlanCalendar.tsx';
+import { TaskEditor } from './TaskEditor.tsx';
+import { Settings } from './Settings.tsx';
+import { ConflictReview } from './ConflictReview.tsx';
 import { Courses } from './Courses.tsx';
+import { AiAssistant, DraftReview } from './AiAssistant.tsx';
+import { Reminders } from './Reminders.tsx';
+import type { DesktopLearningApi } from './LearningLogin.tsx';
 const views = [
-  ['today', '今天', '◉'],
-  ['inbox', '收集箱', '▣'],
-  ['upcoming', '计划', '▦'],
-  ['completed', '已完成', '✓'],
-  ['courses', '课程', '▤'],
-  ['ai', 'AI 助手', '✧'],
+  ['today', '今天'],
+  ['inbox', '收集箱'],
+  ['upcoming', '计划'],
+  ['completed', '已完成'],
+  ['courses', '课程'],
+  ['ai', 'AI 助手'],
 ] as const;
-const localTime = (v: string | null) =>
-  v ? `${dateKey(v)}T${new Date(v).toTimeString().slice(0, 5)}` : '';
-const iso = (v: FormDataEntryValue | null) => (v ? new Date(String(v)).toISOString() : null);
-function Detail({
-  task,
-  tasks,
-  courses,
-  save,
-  remove,
-  create,
-  close,
-  assignment,
-}: {
-  task: Task;
-  tasks: Task[];
-  courses: Snapshot['courses'];
-  assignment?: Snapshot['learning']['assignments'][number];
-  save: (id: string, p: TaskPatch) => Promise<void>;
-  remove: (id: string) => Promise<void>;
-  create: (t: string, p: TaskPatch) => Promise<unknown>;
-  close: () => void;
-}) {
-  const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [child, setChild] = useState('');
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    setBusy(true);
-    try {
-      if (
-        data.get('start') &&
-        data.get('due') &&
-        new Date(String(data.get('start'))) > new Date(String(data.get('due')))
-      )
-        throw new Error('截止时间不能早于开始时间');
-      await save(task.id, {
-        title: String(data.get('title')),
-        description: String(data.get('description')),
-        notes: String(data.get('notes')),
-        status: String(data.get('status')) as Task['status'],
-        priority: Number(data.get('priority')),
-        start_at: iso(data.get('start')),
-        due_at: iso(data.get('due')),
-        course_id: String(data.get('course')) || null,
-        parent_id: String(data.get('parent')) || null,
-        tags: String(data.get('tags'))
-          .split(/[,，]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
-        reminders: String(data.get('reminders'))
-          .split(/[,，]/)
-          .filter((v) => v.trim())
-          .map((v) => ({ minutes_before: Number(v) })),
-      });
-      close();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <aside className="fdu-detail" aria-label="任务详情">
-      <div className="detail-heading">
-        <span>任务详情</span>
-        <button onClick={close} aria-label="关闭任务详情">
-          ✕
-        </button>
-      </div>
-      {assignment && (
-        <section className="assignment-row">
-          <b>eLearning 原始信息</b>
-          <p>{assignment.original_title}</p>
-          <p>
-            官方截止：
-            {assignment.original_due_at
-              ? new Date(assignment.original_due_at).toLocaleString('zh-CN')
-              : '未设置截止'}
-          </p>
-          <p>Canvas 提交：{submissionLabel(assignment.submission_state)}</p>
-          <p>
-            提交时间：
-            {assignment.submitted_at
-              ? new Date(assignment.submitted_at).toLocaleString('zh-CN')
-              : '未提供'}
-          </p>
-          <small>个人标题、日期、备注与完成状态不会被课程刷新覆盖。</small>
-          <a href={assignment.official_url} target="_blank" rel="noreferrer">
-            打开官方作业 ↗
-          </a>
-        </section>
-      )}
-      <form onSubmit={submit}>
-        <label>
-          标题
-          <input name="title" defaultValue={task.title} required maxLength={200} />
-        </label>
-        <div className="form-grid">
-          <label>
-            个人状态
-            <select aria-label="个人状态" name="status" defaultValue={task.status}>
-              <option value="todo">待办</option>
-              <option value="in_progress">进行中</option>
-              <option value="completed">已完成</option>
-            </select>
-          </label>
-          <label>
-            优先级
-            <select aria-label="优先级" name="priority" defaultValue={task.priority}>
-              <option value="0">无优先级</option>
-              <option value="1">低</option>
-              <option value="2">中</option>
-              <option value="3">高</option>
-            </select>
-          </label>
-          <label>
-            开始时间
-            <input type="datetime-local" name="start" defaultValue={localTime(task.start_at)} />
-          </label>
-          <label>
-            截止时间
-            <input
-              type="datetime-local"
-              aria-label="截止时间"
-              name="due"
-              defaultValue={localTime(task.due_at)}
-            />
-            <div className="date-shortcuts">
-              {[
-                ['今天', 0],
-                ['明天', 1],
-                ['一周后', 7],
-              ].map(([label, offset]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={(e) => {
-                    const input = e.currentTarget
-                      .closest('form')!
-                      .elements.namedItem('due') as HTMLInputElement;
-                    const d = new Date();
-                    d.setDate(d.getDate() + Number(offset));
-                    input.value = `${dateKey(d)}T18:00`;
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </label>
-        </div>
-        <label>
-          课程
-          <select aria-label="课程" name="course" defaultValue={task.course_id ?? ''}>
-            <option value="">个人任务</option>
-            {courses.map((c) => (
-              <option value={c.id} key={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          父任务
-          <select aria-label="父任务" name="parent" defaultValue={task.parent_id ?? ''}>
-            <option value="">独立任务</option>
-            {tasks
-              .filter((t) => t.id !== task.id)
-              .map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          标签
-          <input name="tags" defaultValue={task.tags.join('，')} placeholder="用逗号分隔" />
-        </label>
-        <label>
-          截止前提醒（分钟）
-          <input
-            name="reminders"
-            defaultValue={task.reminders.map((r) => r.minutes_before).join(',')}
-            placeholder="例如 60,1440"
-          />
-        </label>
-        <small>提醒配置会同步。系统通知与 iPhone 推送将在后续阶段提供。</small>
-        <label>
-          任务描述
-          <textarea name="description" defaultValue={task.description} rows={2} />
-        </label>
-        <label>
-          备注
-          <textarea name="notes" defaultValue={task.notes} rows={4} />
-        </label>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        <div className="detail-actions">
-          <button className="primary" disabled={busy}>
-            {busy ? '保存中…' : '保存任务'}
-          </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              if (confirm('删除此任务？子任务会保留。'))
-                void remove(task.id)
-                  .then(close)
-                  .catch((e) => setError(String(e)));
-            }}
-          >
-            删除任务
-          </button>
-        </div>
-      </form>
-      <section className="subtasks">
-        <h3>子任务</h3>
-        {tasks
-          .filter((t) => t.parent_id === task.id)
-          .map((t) => (
-            <div key={t.id}>
-              <input
-                aria-label={`完成 ${t.title}`}
-                type="checkbox"
-                checked={t.status === 'completed'}
-                onChange={() =>
-                  void save(t.id, {
-                    status: t.status === 'completed' ? 'todo' : 'completed',
-                  }).catch((e) => setError(String(e)))
-                }
-              />
-              <span>{t.title}</span>
-              <button
-                onClick={() => {
-                  if (confirm('删除子任务？')) void remove(t.id).catch((e) => setError(String(e)));
-                }}
-              >
-                删除
-              </button>
-            </div>
-          ))}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void create(child, { parent_id: task.id, course_id: task.course_id })
-              .then(() => setChild(''))
-              .catch((e) => setError(String(e)));
-          }}
-        >
-          <input
-            aria-label="子任务标题"
-            placeholder="添加一个小步骤"
-            value={child}
-            onChange={(e) => setChild(e.target.value)}
-            required
-          />
-          <button>添加</button>
-        </form>
-      </section>
-      <small>个人完成状态独立于 eLearning 提交状态。</small>
-    </aside>
-  );
-}
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function TodoApp({
   api,
   assistant,
@@ -307,105 +37,203 @@ export function TodoApp({
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [error, setError] = useState(''),
     [view, setView] = useState('today'),
-    [query, setQuery] = useState(''),
-    [course, setCourse] = useState(''),
-    [priority, setPriority] = useState(''),
-    [source, setSource] = useState(''),
-    [status, setStatus] = useState(''),
-    [tag, setTag] = useState(''),
-    [sort, setSort] = useState('due'),
-    [selected, setSelected] = useState<string | null>(null),
     [title, setTitle] = useState(''),
+    [selected, setSelected] = useState<string | null>(null),
+    [newTask, setNewTask] = useState(false),
     [settings, setSettings] = useState(false),
-    [online, setOnline] = useState(navigator.onLine),
-    [update, setUpdate] = useState(false),
+    [openModels, setOpenModels] = useState(false),
+    [query, setQuery] = useState(''),
+    [global, setGlobal] = useState(false),
+    [filtersOpen, setFiltersOpen] = useState(false),
+    [filters, setFilters] = useState({ course: '', priority: '', source: '', status: '', tag: '' }),
+    [sort, setSort] = useState('due'),
     [day, setDay] = useState(''),
-    [anchor, setAnchor] = useState(() => dateKey(new Date())),
-    [planMode, setPlanMode] = useState(() => {
-      const saved = localStorage.getItem('fdu-plan-view');
-      return saved === 'week' || saved === 'month' ? saved : 'list';
-    }),
-    [models, setModels] = useState(false),
-    [newSchedule, setNewSchedule] = useState(false);
-  const refresh = () =>
-    api
-      .snapshot()
-      .then(setSnapshot)
-      .catch((e) => setError(String(e)));
-  const run = async (fn: () => Promise<unknown>) => {
+    [anchor, setAnchor] = useState(() => dayKey(new Date())),
+    [planMode, setPlanMode] = useState(() =>
+      ['week', 'month'].includes(localStorage.getItem('fdu-plan-view') ?? '')
+        ? localStorage.getItem('fdu-plan-view')!
+        : 'list',
+    ),
+    [online, setOnline] = useState(navigator.onLine),
+    [clock, setClock] = useState(Date.now()),
+    [update, setUpdate] = useState(false),
+    [chosen, setChosen] = useState<string[]>([]),
+    [bulk, setBulk] = useState(false),
+    [folded, setFolded] = useState<string[]>([]),
+    [trash, setTrash] = useState(false),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState(''),
+    [noticeTick, setNoticeTick] = useState(0),
+    [aiPrompt, setAiPrompt] = useState(''),
+    [openDocument, setOpenDocument] = useState(''),
+    [displayCount, setDisplayCount] = useState(100),
+    [visited, setVisited] = useState<string[]>(['today']);
+  const lastRevision = useRef('');
+  useEffect(() => setDisplayCount(100), [view, query, filters, sort, day, planMode]);
+  const undo = useRef<{ label: string; apply: () => Promise<void> }[]>([]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 10000);
+    return () => clearTimeout(timer);
+  }, [notice, noticeTick]);
+  const refresh = useCallback(async () => {
     try {
-      setError('');
-      await fn();
-      await refresh();
-      void api
-        .sync()
-        .then(refresh)
-        .catch(() => refresh());
+      const next = await api.snapshot();
+      const target = new URL(location.href).searchParams.get('task');
+      if (target && next.tasks.some((t) => t.id === target)) {
+        setSelected(target);
+        history.replaceState(null, '', location.pathname);
+      }
+      setSnapshot((before) => (JSON.stringify(before) === JSON.stringify(next) ? before : next));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      await refresh();
-      throw e;
+      setError(errorText(e));
     }
+  }, [api]);
+  const run = useCallback(
+    async (fn: () => Promise<unknown>) => {
+      setError('');
+      try {
+        await fn();
+        await refresh();
+        void api.sync().then(refresh).catch(refresh);
+      } catch (e) {
+        setError(errorText(e));
+        await refresh();
+        throw e;
+      }
+    },
+    [api, refresh],
+  );
+  const navigate = (next: string) => {
+    setView(next);
+    setVisited((v) => (v.includes(next) ? v : [...v, next]));
+    setSelected(null);
+    setDay('');
+    setChosen([]);
+    setBulk(false);
+    setTrash(false);
+    setGlobal(false);
+    setQuery('');
+    setFilters({ course: '', priority: '', source: '', status: '', tag: '' });
+  };
+  const remember = (label: string, apply: () => Promise<void>) => {
+    undo.current = [...undo.current.slice(-9), { label, apply }];
+    setNotice(label);
+    setNoticeTick((value) => value + 1);
+  };
+  const save = async (id: string, patch: TaskPatch, base?: Task) => {
+    const before = snapshot?.tasks.find((t) => t.id === id);
+    await run(() => api.change(id, patch, base));
+    if (before)
+      remember('任务已保存', async () => {
+        const current = (await api.snapshot()).tasks.find((t) => t.id === id);
+        if (!current) throw new Error('任务已不存在');
+        for (const key of Object.keys(patch))
+          if (
+            JSON.stringify(current[key as keyof Task]) !==
+            JSON.stringify(patch[key as keyof TaskPatch])
+          )
+            throw new Error('任务后来又有变更，请打开详情核对');
+        await api.change(
+          id,
+          Object.fromEntries(Object.keys(patch).map((key) => [key, before[key as keyof Task]])),
+          current,
+        );
+      });
+  };
+  const create = async (t: string, p: TaskPatch) => {
+    let id = '';
+    await run(async () => {
+      id = await api.create(t, p);
+    });
+    remember('已添加任务', () => api.remove(id));
+  };
+  const remove = async (id: string) => {
+    await run(() => api.remove(id));
+    remember('任务已移到回收站', () => api.restore(id));
+  };
+  const ask = (text: string) => {
+    navigate('ai');
+    setAiPrompt(text);
   };
   useEffect(() => {
     void refresh();
     const tick = () => {
       setOnline(navigator.onLine);
+      setClock(Date.now());
       if (document.visibilityState !== 'hidden')
         void api
           .sync()
           .catch(() => {})
           .finally(refresh);
     };
+    const mirror = setInterval(() => {
+      if (document.visibilityState !== 'hidden')
+        void api
+          .revision()
+          .then((v) => {
+            if (v !== lastRevision.current) {
+              lastRevision.current = v;
+              return refresh();
+            }
+          })
+          .catch(() => {});
+    }, 1000);
+    const timer = setInterval(tick, 30000);
+    const updated = () => setUpdate(true);
+    const models = () => {
+      setSettings(true);
+      setOpenModels(true);
+      setTimeout(() => window.dispatchEvent(new Event('fdu-model-settings-open')), 0);
+    };
     window.addEventListener('online', tick);
     window.addEventListener('offline', tick);
     document.addEventListener('visibilitychange', tick);
-    const updated = () => setUpdate(true);
     window.addEventListener('fdu-update', updated);
-    const interval = setInterval(tick, 30000);
-    const mirror = setInterval(refresh, 2000);
+    window.addEventListener('fdu-model-settings', models);
     tick();
     return () => {
-      clearInterval(interval);
       clearInterval(mirror);
+      clearInterval(timer);
       window.removeEventListener('online', tick);
       window.removeEventListener('offline', tick);
       document.removeEventListener('visibilitychange', tick);
       window.removeEventListener('fdu-update', updated);
+      window.removeEventListener('fdu-model-settings', models);
     };
-  }, [api]);
+  }, [api, refresh]);
   useEffect(() => {
-    if (!snapshot) return;
-    const theme = snapshot.catalog.theme;
-    const root = document.documentElement;
-    root.dataset.fduTheme = theme;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const theme = snapshot?.catalog.theme ?? 'system';
+    const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
       const dark = theme === 'dark' || (theme === 'system' && media.matches);
-      root.classList.toggle('dark', dark);
-      root.classList.toggle('light', !dark);
-      root.style.colorScheme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.fduTheme = theme;
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.classList.toggle('light', !dark);
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     };
     apply();
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);
   }, [snapshot?.catalog.theme]);
   useEffect(() => {
-    const openModels = () => {
-      setSettings(true);
-      setModels(true);
+    const context = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      setView('ai');
+      setVisited((v) => (v.includes('ai') ? v : [...v, 'ai']));
+      setAiPrompt(text);
     };
-    window.addEventListener('fdu-model-settings', openModels);
-    return () => window.removeEventListener('fdu-model-settings', openModels);
+    window.addEventListener('fdu-ai-context', context);
+    return () => window.removeEventListener('fdu-ai-context', context);
   }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === 'Escape') {
-        setSelected(null);
-        setSettings(false);
-        setNewSchedule(false);
-      }
+      if (
+        [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].some(
+          (el) => el.getClientRects().length,
+        )
+      )
+        return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         document.getElementById('fdu-search')?.focus();
@@ -418,6 +246,34 @@ export function TodoApp({
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, []);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const hash = (event as CustomEvent<string>).detail;
+      setView('courses');
+      setVisited((v) => (v.includes('courses') ? v : [...v, 'courses']));
+      setSelected(null);
+      setNewTask(false);
+      setOpenDocument(hash + '#' + Date.now());
+    };
+    window.addEventListener('fdu-open-document', open);
+    return () => window.removeEventListener('fdu-open-document', open);
+  }, []);
+  const indexes = useMemo(
+    () => ({
+      courses: new Map(snapshot?.courses.map((c) => [c.id, c]) ?? []),
+      assignments: new Map(snapshot?.learning.assignments.map((a) => [a.task_id, a]) ?? []),
+      tasks: new Map(snapshot?.tasks.map((t) => [t.id, t]) ?? []),
+      children: (snapshot?.tasks ?? []).reduce((map, t) => {
+        if (t.parent_id) {
+          const group = map.get(t.parent_id) ?? [];
+          group.push(t);
+          map.set(t.parent_id, group);
+        }
+        return map;
+      }, new Map<string, Task[]>()),
+    }),
+    [snapshot],
+  );
   if (!snapshot)
     return (
       <div className="fdu-app loading">
@@ -431,91 +287,201 @@ export function TodoApp({
         )}
       </div>
     );
-  const { tasks, catalog, courses } = snapshot;
-  const today = dateKey(new Date());
-  const officialDue = (t: Task) =>
-    snapshot.learning.assignments.find((a) => a.task_id === t.id)?.original_due_at;
+  const { tasks, courses, catalog } = snapshot,
+    today = dayKey(new Date());
   const isToday = (t: Task) =>
     !!(
-      (t.due_at && dateKey(t.due_at) <= today) ||
-      (t.start_at && dateKey(t.start_at) <= today) ||
-      (officialDue(t) && dateKey(officialDue(t)!) <= today)
+      (t.start_at && dayKey(t.start_at) <= today) ||
+      (t.due_at && dayKey(t.due_at) <= today) ||
+      (indexes.assignments.get(t.id)?.original_due_at &&
+        dayKey(indexes.assignments.get(t.id)!.original_due_at!) <= today)
     );
+  const overdueTask = (t: Task) =>
+    isOverdue(t) ||
+    (t.status !== 'completed' &&
+      indexes.assignments.get(t.id)?.submission_state === 'unsubmitted' &&
+      !!indexes.assignments.get(t.id)?.original_due_at &&
+      Date.parse(indexes.assignments.get(t.id)!.original_due_at!) < Date.now());
   const incomplete = tasks.filter((t) => t.status !== 'completed');
-  const unscheduled = incomplete.filter((t) => !t.start_at && !t.due_at);
-  const active = tasks.find((t) => t.id === selected);
-  let filtered = tasks.filter((t) =>
-    view === 'completed' ? t.status === 'completed' : t.status !== 'completed',
-  );
-  if (view === 'inbox') filtered = filtered.filter((t) => !t.start_at && !t.due_at);
-  if (view === 'today') filtered = filtered.filter(isToday);
-  if (view === 'upcoming')
-    filtered = filtered.filter((t) => {
-      const at = scheduledAt(t);
-      return (
-        at &&
-        ((planMode === 'week' || planMode === 'month') && day
-          ? occursOn(t, day)
-          : dateKey(at) >= today)
-      );
-    });
   const matches = (t: Task) =>
-    (!course || t.course_id === course) &&
-    (!source ||
-      (source === 'canvas') === snapshot.learning.assignments.some((a) => a.task_id === t.id)) &&
-    (!priority || t.priority === Number(priority)) &&
-    (!status || t.status === status) &&
-    (!tag || t.tags.includes(tag)) &&
-    `${t.title} ${t.description} ${t.notes} ${t.tags.join(' ')} ${courses.find((c) => c.id === t.course_id)?.name ?? ''}`
+    (!filters.course || t.course_id === filters.course) &&
+    (!filters.priority || t.priority === Number(filters.priority)) &&
+    (!filters.source || (filters.source === 'canvas') === indexes.assignments.has(t.id)) &&
+    (!filters.status || t.status === filters.status) &&
+    (!filters.tag || t.tags.includes(filters.tag)) &&
+    `${t.title} ${t.notes} ${t.description} ${t.tags.join(' ')} ${indexes.courses.get(t.course_id ?? '')?.name ?? ''}`
       .toLowerCase()
       .includes(query.toLowerCase());
-  filtered = filtered.filter(matches);
-  const completedToday = tasks.filter(
-    (task) =>
-      task.status === 'completed' &&
-      task.completed_at &&
-      dateKey(task.completed_at) === today &&
-      matches(task),
+  let list = (trash ? snapshot.deletedTasks : tasks).filter((t) =>
+    global || trash
+      ? true
+      : view === 'completed'
+        ? t.status === 'completed'
+        : t.status !== 'completed',
   );
-  const plannedDay =
-    view === 'upcoming' && (planMode === 'week' || planMode === 'month') && day ? day : today;
-  filtered.sort((a, b) =>
+  if (!global && !trash) {
+    if (view === 'today') list = list.filter(isToday);
+    if (view === 'inbox')
+      list = list.filter(
+        (t) => !scheduledAt(t) && (!t.parent_id || !indexes.tasks.has(t.parent_id)),
+      );
+    if (view === 'upcoming')
+      list = list.filter((t) =>
+        day && (planMode === 'week' || planMode === 'month') ? occursOn(t, day) : inPlan(t),
+      );
+  }
+  list = list
+    .filter(matches)
+    .filter((t) => global || !t.parent_id || !folded.includes(t.parent_id));
+  list.sort((a, b) =>
     sort === 'priority'
       ? b.priority - a.priority
       : sort === 'title'
         ? a.title.localeCompare(b.title, 'zh')
         : sort === 'created'
           ? b.created_at.localeCompare(a.created_at)
-          : sort === 'completed'
+          : sort === 'completed' || view === 'completed'
             ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
-            : (a.due_at ?? 'z').localeCompare(b.due_at ?? 'z') || b.priority - a.priority,
+            : (scheduledAt(a) ?? 'z').localeCompare(scheduledAt(b) ?? 'z'),
   );
-  if (view === 'upcoming' && sort === 'due')
-    filtered.sort((a, b) => (scheduledAt(a) ?? '').localeCompare(scheduledAt(b) ?? ''));
-  if (view === 'today')
-    filtered.sort(
-      (a, b) =>
-        Number(!!(a.due_at && dateKey(a.due_at) < today)) -
-        Number(!!(b.due_at && dateKey(b.due_at) < today)),
-    );
-  const counts = {
+  if (view === 'today' && !global)
+    list.sort((a, b) => Number(overdueTask(a)) - Number(overdueTask(b)));
+  const completedToday = tasks.filter(
+    (t) =>
+      t.status === 'completed' && t.completed_at && dayKey(t.completed_at) === today && matches(t),
+  );
+  const counts: Record<string, number> = {
     today: incomplete.filter(isToday).length,
-    inbox: incomplete.filter((t) => !t.start_at && !t.due_at).length,
-    upcoming: incomplete.filter((t) => (t.due_at ?? t.start_at ?? '') > today).length,
-    courses: courses.length,
+    inbox: incomplete.filter((t) => !scheduledAt(t) && !t.parent_id).length,
+    upcoming: incomplete.filter((t) => inPlan(t)).length,
     completed: tasks.length - incomplete.length,
-    ai: 0,
+    courses: courses.length,
   };
-  const save = (id: string, p: TaskPatch) => run(() => api.change(id, p)).then(() => {}),
-    remove = (id: string) => run(() => api.remove(id)).then(() => {}),
-    create = (t: string, p: TaskPatch) => run(() => api.create(t, p));
-  const download = async () => {
-    const blob = new Blob([await api.export()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `FDU-Agent-${today}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const active = tasks.find((t) => t.id === selected),
+    plannedDay = view === 'upcoming' && day ? day : today;
+  const saveTemplate = async (title: string, template: TaskPatch) => {
+    if (JSON.stringify(template).length > 15000) throw new Error('模板内容过长，请精简描述和备注');
+    const existing = catalog.plans.find((p) => p.template && p.title === title);
+    await run(() =>
+      api.catalog({
+        ...catalog,
+        plans: [
+          ...catalog.plans.filter((p) => p.id !== existing?.id),
+          { id: existing?.id ?? crypto.randomUUID(), title, task_ids: [], template },
+        ],
+      }),
+    );
+  };
+  const filterCount = Object.values(filters).filter(Boolean).length;
+  const setFilter = (key: keyof typeof filters, value: string) =>
+    setFilters((f) => ({ ...f, [key]: value }));
+  const row = (t: Task) => {
+    const children = indexes.children.get(t.id) ?? [],
+      assignment = indexes.assignments.get(t.id);
+    const date = scheduledAt(t),
+      dateKey = date ? dayKey(date) : '';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateLabel = !date
+      ? '安排日期'
+      : dateKey === today
+        ? '今天'
+        : dateKey === dayKey(tomorrow)
+          ? '明天'
+          : new Date(date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    return (
+      <div
+        className={`task-row priority-${t.priority}${t.parent_id ? ' is-child' : ''}`}
+        key={t.id}
+        draggable={!bulk && matchMedia('(pointer: fine)').matches}
+        onDragStart={(e) => e.dataTransfer.setData('text/fdu-task', t.id)}
+      >
+        <label className="task-check">
+          {bulk ? (
+            <input
+              type="checkbox"
+              aria-label={`选择 ${t.title}`}
+              checked={chosen.includes(t.id)}
+              onChange={() =>
+                setChosen((ids) =>
+                  ids.includes(t.id) ? ids.filter((id) => id !== t.id) : [...ids, t.id],
+                )
+              }
+            />
+          ) : (
+            <input
+              type="checkbox"
+              aria-label={`${t.status === 'completed' ? '撤销完成' : '完成'} ${t.title}`}
+              checked={t.status === 'completed'}
+              onChange={() =>
+                void save(t.id, { status: t.status === 'completed' ? 'todo' : 'completed' }).catch(
+                  () => {},
+                )
+              }
+            />
+          )}
+        </label>
+        <button className="task-open" onClick={() => setSelected(t.id)}>
+          <span className={t.status === 'completed' ? 'done' : ''}>{t.title}</span>
+          <small>
+            {indexes.courses.get(t.course_id ?? '')?.name ?? '个人任务'}
+            {t.priority > 0 ? ` · ${['', '低', '中', '高'][t.priority]}优先级` : ''}
+            {assignment
+              ? ` · eLearning · ${assignment.submission_state === 'unsubmitted' ? '未提交' : assignment.submission_state === 'unknown' ? '提交未知' : '已提交'}`
+              : ''}
+            {!snapshot.localOnly && snapshot.pendingIds.includes(t.id) ? ' · 待同步' : ''}
+            {t.status === 'in_progress' ? ' · 进行中' : ''}
+            {t.time_kind === 'day'
+              ? ' · 未定时'
+              : t.time_kind === 'range' && t.start_at && t.due_at
+                ? ` · ${new Date(t.start_at).toTimeString().slice(0, 5)}–${new Date(t.due_at).toTimeString().slice(0, 5)}${dayKey(t.start_at) !== dayKey(t.due_at) ? ' · 跨天' : ''}${Date.parse(t.start_at) <= Date.now() && Date.parse(t.due_at) > Date.now() ? ' · 正在进行' : Date.parse(t.due_at) < Date.now() ? ' · 时间已过' : ''}`
+                : t.due_at
+                  ? ` · ${new Date(t.due_at).toTimeString().slice(0, 5)} 截止${isOverdue(t) ? ' · 已逾期' : ''}`
+                  : ''}
+            {t.repeat ? ' · 重复任务' : ''}
+          </small>
+          {assignment?.original_due_at && (
+            <small>官方截止 {new Date(assignment.original_due_at).toLocaleString('zh-CN')}</small>
+          )}
+        </button>
+        {children.length > 0 && (
+          <button
+            aria-label={`折叠子任务 ${t.title}`}
+            onClick={() =>
+              setFolded((ids) =>
+                ids.includes(t.id) ? ids.filter((id) => id !== t.id) : [...ids, t.id],
+              )
+            }
+          >
+            {children.filter((c) => c.status === 'completed').length}/{children.length}{' '}
+            {folded.includes(t.id) ? '▸' : '▾'}
+          </button>
+        )}
+        <label className={`task-date${isOverdue(t) ? ' overdue' : ''}`} title="点击调整安排日期">
+          <NavIcon name="upcoming" />
+          <span>{dateLabel}</span>
+          <input
+            type="date"
+            className={`due ${isOverdue(t) ? 'overdue' : ''}`}
+            aria-label={`安排日期 ${t.title}`}
+            value={scheduledAt(t) ? dayKey(scheduledAt(t)!) : ''}
+            onClick={(e) => {
+              try {
+                e.currentTarget.showPicker?.();
+              } catch {}
+            }}
+            onChange={(e) =>
+              void save(
+                t.id,
+                e.target.value
+                  ? moveTaskToDay(t, e.target.value)
+                  : { start_at: null, due_at: null, time_kind: null, repeat: null },
+              ).catch(() => {})
+            }
+          />
+        </label>
+      </div>
+    );
   };
   return (
     <div className="fdu-app">
@@ -535,12 +501,7 @@ export function TodoApp({
               <button
                 className={view === id ? 'active' : ''}
                 aria-current={view === id ? 'page' : undefined}
-                onClick={() => {
-                  setView(id);
-                  setDay('');
-                  setCourse('');
-                  setSelected(null);
-                }}
+                onClick={() => navigate(id)}
               >
                 <span className="nav-icon">
                   <NavIcon name={id} />
@@ -552,33 +513,27 @@ export function TodoApp({
           ))}
         </div>
         <div className="nav-bottom">
-          <button onClick={() => setSettings(true)}>⚙ 设置与同步</button>
+          <button onClick={() => setSettings(true)}>
+            <NavIcon name="settings" />
+            设置与同步
+          </button>
           <small>日月光华，旦复旦兮</small>
         </div>
       </nav>
       <nav className="mobile-nav" aria-label="手机导航">
-        {(
-          [
-            ['today', '今天', '◉'],
-            ['inbox', '任务', '▣'],
-            ['upcoming', '计划', '▦'],
-            ['courses', '课程', '▤'],
-            ['ai', 'AI', '✧'],
-          ] as const
-        ).map(([id, label]) => (
+        {[
+          ['today', '今天'],
+          ['inbox', '任务'],
+          ['upcoming', '计划'],
+          ['courses', '课程'],
+          ['ai', 'AI'],
+        ].map(([id, label]) => (
           <button
             key={id}
             className={view === id || (id === 'inbox' && view === 'completed') ? 'active' : ''}
-            onClick={() => {
-              setView(id);
-              setCourse('');
-              setDay('');
-              setSelected(null);
-            }}
+            onClick={() => navigate(id!)}
           >
-            <span className="nav-icon">
-              <NavIcon name={id} />
-            </span>
+            <NavIcon name={id!} />
             <span>{label}</span>
           </button>
         ))}
@@ -593,50 +548,74 @@ export function TodoApp({
             })}
           </div>
           <div className="page-title">
-            <h1>{views.find((v) => v[0] === view)?.[1]}</h1>
+            <h1>
+              {global ? '搜索结果' : trash ? '回收站' : views.find(([id]) => id === view)?.[1]}
+            </h1>
             <button
               className="mobile-settings"
-              onClick={() => setSettings(true)}
               aria-label="设置与同步"
+              onClick={() => setSettings(true)}
             >
-              ⚙
+              <NavIcon name="settings" />
             </button>
           </div>
-          <p className="subtitle">
-            {view === 'today'
-              ? '把重要的事，留给今天。'
-              : view === 'inbox'
-                ? '先记下来，再从容安排。'
-                : view === 'courses'
-                  ? '让课程与个人计划有条不紊。'
-                  : view === 'completed'
-                    ? '每一个完成，都算数。'
-                    : view === 'ai'
-                      ? '把问题说清楚，一起找到下一步。'
-                      : '给未来留出清晰的位置。'}
-          </p>
           <div className="sync-line">
-            <span className={online ? 'connection' : 'connection offline'} />
+            <span className={online && !snapshot.error ? 'connection' : 'connection offline'} />
             <span>
               {!online
-                ? '离线 · 修改保存在本机'
+                ? '离线 · 已存本机'
                 : snapshot.localOnly
-                  ? '本机模式 · 尚未连接云端'
-                  : snapshot.syncing
-                    ? '正在同步'
-                    : snapshot.pending
-                      ? `${snapshot.pending} 项待同步`
-                      : '云端已确认'}
+                  ? '本机模式 · 已存本机'
+                  : snapshot.conflicts.length
+                    ? '存在任务冲突'
+                    : snapshot.error
+                      ? '同步异常 · 已存本机'
+                      : snapshot.syncing
+                        ? '正在同步'
+                        : snapshot.pending
+                          ? `${snapshot.pending} 项改动待同步`
+                          : snapshot.lastSyncAt
+                            ? `已同步 ${new Date(snapshot.lastSyncAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+                            : '等待云端确认'}
             </span>
-            <button onClick={() => void run(() => api.sync()).catch(() => {})}>同步</button>
+            <button onClick={() => void run(() => api.sync(true)).catch(() => {})}>同步</button>
           </div>
         </header>
-        <Reminders snapshot={snapshot} />
+        {(error || snapshot.error) && (
+          <div className="notice error" role="alert">
+            {error || snapshot.error}
+            <button onClick={() => void run(() => api.sync(true)).catch(() => {})}>重试</button>
+          </div>
+        )}
+        <ConflictReview snapshot={snapshot} api={api} run={run} />
+        <Reminders snapshot={snapshot} open={setSelected} clock={clock} />
+        {notice && (
+          <div className="action-toast" role="status">
+            <NavIcon name="completed" />
+            <span>{notice}</span>
+            {undo.current.length > 0 && undo.current.at(-1)?.label === notice && (
+              <button
+                onClick={() => {
+                  const item = undo.current.pop();
+                  if (item)
+                    void run(item.apply)
+                      .then(() => setNotice('已撤销'))
+                      .catch(() => {});
+                }}
+              >
+                撤销
+              </button>
+            )}
+            <button aria-label="关闭提示" onClick={() => setNotice('')}>
+              ×
+            </button>
+          </div>
+        )}
         {update && (
           <div className="notice">
-            新版本已准备好。请先保存正在编辑的内容。
+            新版本已准备好，表单草稿会保留。
             <button
-              onClick={() => {
+              onClick={() =>
                 void navigator.serviceWorker.getRegistration().then((reg) => {
                   if (reg?.waiting) {
                     navigator.serviceWorker.addEventListener(
@@ -646,186 +625,168 @@ export function TodoApp({
                     );
                     reg.waiting.postMessage('activate');
                   } else location.reload();
-                });
-              }}
+                })
+              }
             >
               更新应用
             </button>
           </div>
         )}
-        {(error || snapshot.error) && (
-          <div role="alert" className="notice error">
-            {error || snapshot.error}
-          </div>
-        )}
-        {snapshot.conflicts.map((c) => (
-          <div className="notice" key={c.id}>
-            <b>任务冲突：{c.local?.title ?? c.entity_id}</b>
-            <p>
-              本机：{c.local?.title} · {c.local?.notes}
-              <br />
-              云端：{c.server?.deleted_at ? '已删除' : (c.server?.title ?? '不存在')} ·{' '}
-              {c.server?.notes}
-            </p>
-            <button onClick={() => void run(() => api.resolve(c.id, 'server')).catch(() => {})}>
-              保留云端
-            </button>
-            <button onClick={() => void run(() => api.resolve(c.id, 'local')).catch(() => {})}>
-              保留本机
-            </button>
-            <button onClick={() => void download()}>导出备份</button>
-          </div>
-        ))}
-        {snapshot.catalogConflict && (
-          <div className="notice">
-            课程或偏好有冲突。
-            <button onClick={() => void run(() => api.resolveCatalog('server')).catch(() => {})}>
-              保留云端
-            </button>
-            <button onClick={() => void run(() => api.resolveCatalog('local')).catch(() => {})}>
-              保留本机
-            </button>
-          </div>
-        )}
-        {(view === 'inbox' || view === 'completed') && (
-          <div className="view-tabs mobile-task-tabs">
-            <button className={view === 'inbox' ? 'selected' : ''} onClick={() => setView('inbox')}>
-              收集箱
-            </button>
-            <button
-              className={view === 'completed' ? 'selected' : ''}
-              onClick={() => setView('completed')}
-            >
-              已完成
-            </button>
-          </div>
-        )}
-        {snapshot.localOnly && view === 'today' && (
-          <button className="setup-entry" onClick={() => setSettings(true)}>
-            首次使用？打开同步码与 eLearning 连接向导 →
-          </button>
-        )}
-        {view === 'today' && (
-          <ScheduleOverview
-            tasks={tasks}
-            open={setSelected}
-            choose={(key) => {
-              setView('upcoming');
-              setPlanMode('week');
-              setAnchor(key);
-              setDay(key);
-            }}
-          />
-        )}
-        {view === 'courses' && (
-          <Courses
-            api={api}
-            reload={refresh}
-            snapshot={snapshot}
-            selectTask={setSelected}
-            library={library}
-            refresh={() =>
-              void run(() =>
-                desktopLearning ? desktopLearning.refresh() : api.refreshElearning(),
-              ).catch(() => {})
-            }
-            desktopLearning={desktopLearning}
-            add={(name) =>
-              run(() =>
-                api.catalog({
-                  ...catalog,
-                  courses: [...catalog.courses, { id: crypto.randomUUID(), name }],
-                }),
-              )
-            }
-          />
-        )}
-        {view === 'ai' && (
-          <section className="assistant-panel">
-            <DraftReview
+        <div hidden={view !== 'courses'}>
+          {visited.includes('courses') && (
+            <Courses
+              api={api}
               snapshot={snapshot}
-              decide={(id, confirm) => run(() => api.decideAi(id, confirm))}
+              reload={refresh}
+              selectTask={setSelected}
+              library={library}
+              refresh={() =>
+                void run(() =>
+                  desktopLearning ? desktopLearning.refresh() : api.refreshElearning(),
+                ).catch(() => {})
+              }
+              desktopLearning={desktopLearning}
+              add={(name) =>
+                run(() =>
+                  api.catalog({
+                    ...catalog,
+                    courses: [...catalog.courses, { id: crypto.randomUUID(), name }],
+                  }),
+                )
+              }
+              ask={ask}
+              create={(course) => {
+                setFilters((f) => ({ ...f, course }));
+                setNewTask(true);
+              }}
             />
-            {assistant ?? <AiAssistant api={api} refresh={refresh} initial={snapshot.aiMessages} />}
-          </section>
-        )}
+          )}
+        </div>
+        <div hidden={view !== 'ai'}>
+          {visited.includes('ai') && (
+            <section className="assistant-panel">
+              <DraftReview
+                snapshot={snapshot}
+                undo={(id) => run(() => api.undoAi(id))}
+                decide={(id, yes, proposal) => run(() => api.decideAi(id, yes, proposal))}
+              />
+              {aiPrompt && (
+                <div className="notice">
+                  <p>{aiPrompt}</p>
+                  {assistant && (
+                    <button
+                      onClick={() =>
+                        void navigator.clipboard
+                          .writeText(aiPrompt)
+                          .then(() => setNotice('已复制，请粘贴到桌面助手'))
+                      }
+                    >
+                      复制给桌面助手
+                    </button>
+                  )}
+                </div>
+              )}
+              {assistant ?? (
+                <AiAssistant
+                  api={api}
+                  refresh={refresh}
+                  initial={snapshot.aiMessages}
+                  prompt={aiPrompt}
+                />
+              )}
+            </section>
+          )}
+        </div>
         {view !== 'courses' && view !== 'ai' && (
           <>
-            {view === 'today' && (
-              <p className="today-progress">
-                今天已完成{' '}
-                {
-                  tasks.filter(
-                    (t) =>
-                      t.status === 'completed' &&
-                      t.completed_at &&
-                      dateKey(t.completed_at) === today,
-                  ).length
-                }{' '}
-                项 · 还有 {counts.today} 项待处理
-              </p>
+            {(view === 'inbox' || view === 'completed') && (
+              <div className="view-tabs mobile-task-tabs">
+                <button onClick={() => navigate('inbox')}>收集箱</button>
+                <button onClick={() => navigate('completed')}>已完成</button>
+                <button onClick={() => setTrash(!trash)}>回收站</button>
+              </div>
             )}
-            {view === 'today' && unscheduled.length > 0 && (
-              <button className="inbox-hint" onClick={() => setView('inbox')}>
-                {unscheduled.length} 项尚未安排 <span>去收集箱整理 →</span>
-              </button>
+            {!trash && view !== 'completed' && (
+              <form
+                className="quick-add"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
+                }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (busy) return;
+                  setBusy(true);
+                  void create(title, {
+                    ...(filters.course ? { course_id: filters.course } : {}),
+                    ...(view === 'today' || view === 'upcoming'
+                      ? {
+                          start_at: new Date(`${plannedDay}T00:00`).toISOString(),
+                          time_kind: 'day' as const,
+                        }
+                      : {}),
+                  })
+                    .then(() => {
+                      setTitle('');
+                      document.getElementById('quick-task')?.focus();
+                    })
+                    .catch(() => {})
+                    .finally(() => setBusy(false));
+                }}
+              >
+                <input
+                  id="quick-task"
+                  aria-label="新任务标题"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={
+                    view === 'inbox'
+                      ? '先记下来，稍后安排…'
+                      : view === 'upcoming'
+                        ? `添加到 ${plannedDay}…`
+                        : '今天要做什么？'
+                  }
+                  required
+                  maxLength={200}
+                />
+                <button className="primary" disabled={busy} aria-label="添加">
+                  <NavIcon name="plus" />
+                  <span>添加</span>
+                </button>
+                <button
+                  type="button"
+                  className="quick-detail"
+                  aria-label="详细添加"
+                  title="详细添加"
+                  onClick={() => setNewTask(true)}
+                >
+                  <NavIcon name="more" />
+                  <span>详细添加</span>
+                </button>
+              </form>
             )}
-            <form
-              className="quick-add"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void create(title, {
-                  ...(course ? { course_id: course } : {}),
-                  ...(view === 'today'
-                    ? { start_at: new Date(`${today}T09:00:00`).toISOString() }
-                    : {}),
-                  ...(view === 'upcoming'
-                    ? { due_at: new Date(`${plannedDay}T23:59:00`).toISOString() }
-                    : {}),
-                })
-                  .then(() => setTitle(''))
-                  .catch(() => {});
-              }}
-            >
-              <span>＋</span>
-              <input
-                id="quick-task"
-                aria-label="新任务标题"
-                placeholder={
-                  view === 'today'
-                    ? '今天要做什么？'
-                    : view === 'upcoming'
-                      ? `添加到 ${plannedDay}…`
-                      : '先记下来，稍后安排…'
-                }
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                maxLength={200}
-              />
-              <button className="primary">添加</button>
-              <button type="button" onClick={() => setNewSchedule(true)}>
-                详细添加
-              </button>
-            </form>
-            {view === 'upcoming' && (
+            {view === 'today' && !global && (
+              <div className="today-progress">
+                今天已完成 {completedToday.length} 项 · {counts.today} 项待处理
+                {counts.inbox! > 0 && (
+                  <button onClick={() => navigate('inbox')}>整理 {counts.inbox} 项未安排</button>
+                )}
+              </div>
+            )}
+            {view === 'upcoming' && !global && (
               <>
-                <p className="subtitle">同一批任务，按时间查看。列表看待办，周历／月历排时间。</p>
                 <div className="view-tabs" aria-label="计划视图">
-                  {(
-                    [
-                      ['list', '列表'],
-                      ['week', '周历'],
-                      ['month', '月历'],
-                    ] as const
-                  ).map(([id, label]) => (
+                  {[
+                    ['list', '列表'],
+                    ['week', '周历'],
+                    ['month', '月历'],
+                  ].map(([id, label]) => (
                     <button
                       key={id}
                       className={planMode === id ? 'selected' : ''}
                       onClick={() => {
-                        setPlanMode(id);
+                        setPlanMode(id!);
                         setDay('');
-                        localStorage.setItem('fdu-plan-view', id);
+                        localStorage.setItem('fdu-plan-view', id!);
                       }}
                     >
                       {label}
@@ -839,529 +800,369 @@ export function TodoApp({
                     day={day}
                     tasks={incomplete.filter(matches)}
                     select={setDay}
-                    move={(value) => {
-                      setAnchor(value);
+                    move={(at) => {
+                      setAnchor(at);
                       setDay('');
                     }}
                     open={setSelected}
-                    drop={(id, key) => {
-                      const task = tasks.find((t) => t.id === id);
-                      if (task) void save(id, moveTaskToDay(task, key)).catch(() => {});
+                    drop={(id, at) => {
+                      const t = indexes.tasks.get(id);
+                      if (t) void save(id, moveTaskToDay(t, at)).catch(() => {});
                     }}
                   />
                 )}
               </>
             )}
-            <div className="filters">
-              <input
-                id="fdu-search"
-                aria-label="搜索任务"
-                placeholder="⌕ 搜索任务、备注、标签"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <select
-                aria-label="筛选课程"
-                value={course}
-                onChange={(e) => setCourse(e.target.value)}
+            <div className="task-toolbar">
+              <label className="task-search">
+                <NavIcon name="search" />
+                <input
+                  id="fdu-search"
+                  aria-label="搜索任务"
+                  placeholder="搜索任务、备注、课程"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setGlobal(!trash && !!e.target.value);
+                  }}
+                />
+                <kbd aria-hidden="true">Ctrl K</kbd>
+              </label>
+              <button aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
+                <NavIcon name="filter" />
+                筛选{filterCount ? ` · ${filterCount}` : ''}
+              </button>
+              <button
+                aria-pressed={bulk}
+                onClick={() => {
+                  setBulk(!bulk);
+                  setChosen([]);
+                }}
               >
-                <option value="">所有课程</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="筛选优先级"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-              >
-                <option value="">所有优先级</option>
-                {[0, 1, 2, 3].map((p) => (
-                  <option key={p} value={p}>
-                    {['无优先级', '低优先级', '中优先级', '高优先级'][p]}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="筛选来源"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                <option value="">全部来源</option>
-                <option value="personal">个人与AI任务</option>
-                <option value="canvas">eLearning作业</option>
-              </select>
-              <select
-                aria-label="筛选状态"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                <option value="">所有状态</option>
-                <option value="todo">待办</option>
-                <option value="in_progress">进行中</option>
-                <option value="completed">完成</option>
-              </select>
-              <select aria-label="筛选标签" value={tag} onChange={(e) => setTag(e.target.value)}>
-                <option value="">所有标签</option>
-                {[...new Set(tasks.flatMap((t) => t.tags))].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-              <select aria-label="排序" value={sort} onChange={(e) => setSort(e.target.value)}>
-                <option value="due">{view === 'upcoming' ? '安排时间' : '截止时间'}</option>
-                <option value="priority">优先级</option>
-                <option value="title">标题</option>
-                <option value="created">创建时间</option>
-                <option value="completed">完成时间</option>
-              </select>
-              {(query || course || priority || source || status || tag) && (
+                <NavIcon name="select" />
+                多选
+              </button>
+              {(query || filterCount > 0) && (
                 <button
-                  type="button"
                   onClick={() => {
                     setQuery('');
-                    setCourse('');
-                    setPriority('');
-                    setSource('');
-                    setStatus('');
-                    setTag('');
+                    setGlobal(false);
+                    setFilters({ course: '', priority: '', source: '', status: '', tag: '' });
                   }}
                 >
                   清除筛选
                 </button>
               )}
             </div>
-            <div className="list-heading">
-              <span>
-                {view === 'upcoming' && (planMode === 'week' || planMode === 'month')
-                  ? day || '未来任务'
-                  : '任务清单'}
-              </span>
-              <small>{filtered.length} 项</small>
-            </div>
-            {filtered.length > 0 && (
-              <div className="bulk-actions">
-                <button
-                  onClick={() => {
-                    if (confirm(`完成当前筛选的 ${filtered.length} 项任务？`))
-                      void run(async () => {
-                        for (const task of filtered)
-                          await api.change(task.id, { status: 'completed' });
-                      }).catch(() => {});
-                  }}
+            {filtersOpen && (
+              <div className="filters">
+                <select
+                  aria-label="筛选课程"
+                  value={filters.course}
+                  onChange={(e) => setFilter('course', e.target.value)}
                 >
-                  批量完成筛选结果
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`删除当前筛选的 ${filtered.length} 项任务？子任务会保留。`))
-                      void run(async () => {
-                        for (const task of filtered) await api.remove(task.id);
-                      }).catch(() => {});
-                  }}
+                  <option value="">所有课程</option>
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="筛选优先级"
+                  value={filters.priority}
+                  onChange={(e) => setFilter('priority', e.target.value)}
                 >
-                  批量删除筛选结果
-                </button>
+                  <option value="">所有优先级</option>
+                  {['无', '低', '中', '高'].map((label, i) => (
+                    <option key={i} value={i}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="筛选来源"
+                  value={filters.source}
+                  onChange={(e) => setFilter('source', e.target.value)}
+                >
+                  <option value="">全部来源</option>
+                  <option value="personal">个人与 AI</option>
+                  <option value="canvas">eLearning</option>
+                </select>
+                <select
+                  aria-label="筛选状态"
+                  value={filters.status}
+                  onChange={(e) => setFilter('status', e.target.value)}
+                >
+                  <option value="">所有状态</option>
+                  <option value="todo">待办</option>
+                  <option value="in_progress">进行中</option>
+                  {(global || view === 'completed') && <option value="completed">已完成</option>}
+                </select>
+                <select
+                  aria-label="筛选标签"
+                  value={filters.tag}
+                  onChange={(e) => setFilter('tag', e.target.value)}
+                >
+                  <option value="">所有标签</option>
+                  {[...new Set(tasks.flatMap((t) => t.tags))].map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
               </div>
             )}
+            <div className="list-heading">
+              <span>
+                {global ? '全部任务（含已完成）' : day || '任务清单'} · {list.length} 项
+              </span>
+              <select aria-label="排序" value={sort} onChange={(e) => setSort(e.target.value)}>
+                {[
+                  ['due', '安排时间'],
+                  ['priority', '优先级'],
+                  ['title', '标题'],
+                  ['created', '创建时间'],
+                  ['completed', '完成时间'],
+                ].map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {bulk && (
+              <section className="bulk-actions">
+                <b>已选 {chosen.length} 项</b>
+                <button onClick={() => setChosen(list.map((t) => t.id))}>全选当前结果</button>
+                <button
+                  disabled={!chosen.length}
+                  onClick={() =>
+                    void run(async () => {
+                      for (const id of chosen) await api.change(id, { status: 'completed' });
+                      setChosen([]);
+                    }).catch(() => {})
+                  }
+                >
+                  完成所选
+                </button>
+                <label>
+                  安排日期
+                  <input
+                    type="date"
+                    aria-label="批量安排日期"
+                    disabled={!chosen.length}
+                    onChange={(e) => {
+                      const at = e.target.value;
+                      if (at)
+                        void run(async () => {
+                          for (const id of chosen) {
+                            const t = indexes.tasks.get(id);
+                            if (t) await api.change(id, moveTaskToDay(t, at));
+                          }
+                          setChosen([]);
+                        }).catch(() => {});
+                    }}
+                  />
+                </label>
+                <label>
+                  优先级
+                  <select
+                    aria-label="批量优先级"
+                    disabled={!chosen.length}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const priority = Number(e.target.value);
+                      void run(async () => {
+                        for (const id of chosen) await api.change(id, { priority });
+                      }).catch(() => {});
+                    }}
+                  >
+                    <option value="" disabled>
+                      选择优先级
+                    </option>
+                    {['无', '低', '中', '高'].map((v, i) => (
+                      <option value={i} key={i}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  课程
+                  <select
+                    aria-label="批量课程"
+                    disabled={!chosen.length}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      void run(async () => {
+                        for (const id of chosen) await api.change(id, { course_id: value || null });
+                      }).catch(() => {});
+                    }}
+                  >
+                    <option value="">个人任务</option>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <details>
+                  <summary>更多操作</summary>
+                  <button
+                    className="danger"
+                    disabled={!chosen.length}
+                    onClick={() => {
+                      if (confirm(`将选中的 ${chosen.length} 项移到回收站？`))
+                        void run(async () => {
+                          for (const id of chosen) await api.remove(id);
+                          setChosen([]);
+                        }).catch(() => {});
+                    }}
+                  >
+                    删除所选
+                  </button>
+                </details>
+              </section>
+            )}
             <section className="task-list">
-              {filtered.map((t, index) => (
+              {list.slice(0, displayCount).map((t, index) => (
                 <div className="task-group" key={t.id}>
-                  {view === 'upcoming' &&
+                  {!global &&
+                    view === 'upcoming' &&
                     planMode === 'list' &&
                     sort === 'due' &&
                     (index === 0 ||
-                      dateKey(scheduledAt(filtered[index - 1]!)!) !== dateKey(scheduledAt(t)!)) && (
+                      dayKey(scheduledAt(t)!) !== dayKey(scheduledAt(list[index - 1]!)!)) && (
                       <h3 className="date-group">
-                        {dateKey(scheduledAt(t)!) === today
-                          ? '今天'
-                          : dateKey(scheduledAt(t)!) === dateKey(new Date(Date.now() + 86400000))
-                            ? '明天'
-                            : new Date(scheduledAt(t)!).getTime() < Date.now() + 7 * 86400000
-                              ? '未来 7 天'
-                              : '更远的未来'}{' '}
-                        · {dateKey(scheduledAt(t)!)}
+                        {dayKey(scheduledAt(t)!) < today
+                          ? '正在进行/此前安排'
+                          : dayKey(scheduledAt(t)!) === today
+                            ? '今天'
+                            : dayKey(scheduledAt(t)!)}{' '}
                       </h3>
                     )}
-                  {view === 'today' &&
-                    t.due_at &&
-                    dateKey(t.due_at) < today &&
-                    (index === 0 ||
-                      !(
-                        filtered[index - 1]!.due_at && dateKey(filtered[index - 1]!.due_at!) < today
-                      )) && <h3 className="date-group overdue">逾期未完成</h3>}
-                  <div
-                    className={`task-row priority-${t.priority}`}
-                    key={t.id}
-                    draggable
-                    onDragStart={(event) => event.dataTransfer.setData('text/fdu-task', t.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label={`完成 ${t.title}`}
-                      checked={t.status === 'completed'}
-                      onChange={() =>
-                        void save(t.id, {
-                          status: t.status === 'completed' ? 'todo' : 'completed',
-                        }).catch(() => {})
-                      }
-                    />
-                    <button className="task-open" onClick={() => setSelected(t.id)}>
-                      <span className={t.status === 'completed' ? 'done' : ''}>{t.title}</span>
-                      <small>
-                        {t.priority > 0 && `优先级：${['', '低', '中', '高'][t.priority]} · `}
-                        {tasks.some((c) => c.parent_id === t.id) &&
-                          `${tasks.filter((c) => c.parent_id === t.id).length} 个子任务 · `}
-                        {t.parent_id && tasks.find((p) => p.id === t.parent_id)
-                          ? '↳ 子任务 · '
-                          : ''}
-                        {courses.find((c) => c.id === t.course_id)?.name ?? '个人任务'}
-                        {snapshot.learning.assignments.find((a) => a.task_id === t.id)
-                          ? ` · eLearning · Canvas：${submissionLabel(snapshot.learning.assignments.find((a) => a.task_id === t.id)!.submission_state)}`
-                          : ' · 个人'}
-                        {officialDue(t) &&
-                          ` · 官方截止 ${new Date(officialDue(t)!).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                        {t.status === 'in_progress' ? ' · 进行中' : ''}
-                        {t.start_at && t.due_at && (
-                          <span className="task-time">
-                            {new Date(t.start_at).toLocaleTimeString('zh-CN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                            –
-                            {new Date(t.due_at).toLocaleTimeString('zh-CN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                            {dateKey(t.start_at) !== dateKey(t.due_at) ? ' · 跨天' : ''}
-                            {new Date(t.start_at).getTime() <= Date.now() &&
-                            new Date(t.due_at).getTime() > Date.now()
-                              ? ' · 正在进行'
-                              : ''}
-                          </span>
-                        )}
-                        {t.tags.map((tag) => ` · #${tag}`).join('')}
-                        {view === 'upcoming' && t.due_at && (
-                          <b className="countdown">{countdown(t.due_at)}</b>
-                        )}
-                      </small>
-                    </button>
-                    <input
-                      type="date"
-                      className={`due ${t.due_at && dateKey(t.due_at) < today && t.status !== 'completed' ? 'overdue' : ''}`}
-                      aria-label={`安排日期 ${t.title}`}
-                      title="改期会保留原来的时刻和时长；清空日期会移回收集箱"
-                      value={scheduledAt(t) ? dateKey(scheduledAt(t)!) : ''}
-                      onChange={(e) => {
-                        const date = e.target.value;
-                        void save(
-                          t.id,
-                          date ? moveTaskToDay(t, date) : { start_at: null, due_at: null },
-                        ).catch(() => {});
-                      }}
-                    />
-                  </div>
+                  {!global &&
+                    view === 'today' &&
+                    overdueTask(t) &&
+                    (index === 0 || !overdueTask(list[index - 1]!)) && (
+                      <h3 className="date-group overdue">逾期未完成</h3>
+                    )}
+                  {trash ? (
+                    <div className="task-row">
+                      <span>{t.title}</span>
+                      <button onClick={() => void run(() => api.restore(t.id)).catch(() => {})}>
+                        恢复任务
+                      </button>
+                    </div>
+                  ) : (
+                    row(t)
+                  )}
                 </div>
               ))}
-              {!filtered.length && (
+              {!list.length && (
                 <div className="empty-state">
-                  <span>✓</span>
-                  <h2>{view === 'today' ? '今天，留一点从容' : '这里还很安静'}</h2>
+                  <h2>
+                    {query || filterCount
+                      ? '没有匹配结果'
+                      : trash
+                        ? '回收站为空'
+                        : view === 'today'
+                          ? '今天的待办已处理'
+                          : '暂时没有任务'}
+                  </h2>
                   <p>
-                    {query
-                      ? '没有匹配的任务，试试其他关键词。'
-                      : '添加任务，或调整筛选查看你的安排。'}
+                    {query || filterCount ? '可以清除筛选，查看其他任务。' : '想到什么就记下来。'}
                   </p>
                 </div>
               )}
             </section>
-            {view === 'today' && completedToday.length > 0 && (
-              <details className="today-completed" open>
+            {list.length > displayCount && (
+              <button onClick={() => setDisplayCount((n) => n + 100)}>
+                显示更多（还有 {list.length - displayCount} 项）
+              </button>
+            )}
+            {view === 'today' && !global && completedToday.length > 0 && (
+              <details className="today-completed">
                 <summary>今天已完成 · {completedToday.length} 项</summary>
-                {completedToday.map((task) => (
-                  <div className="task-row" key={task.id}>
-                    <input
-                      type="checkbox"
-                      checked
-                      aria-label={`撤销完成 ${task.title}`}
-                      onChange={() => void save(task.id, { status: 'todo' }).catch(() => {})}
-                    />
-                    <button className="task-open" onClick={() => setSelected(task.id)}>
-                      <span className="done">{task.title}</span>
-                      <small>
-                        {courses.find((c) => c.id === task.course_id)?.name ?? '个人任务'} ·
-                        今天完成
-                      </small>
-                    </button>
-                  </div>
-                ))}
+                {completedToday.map(row)}
               </details>
             )}
+            {view === 'today' &&
+              snapshot.learning.assignments.some(
+                (a) =>
+                  a.submission_state === 'unsubmitted' &&
+                  indexes.tasks.get(a.task_id)?.status === 'completed',
+              ) && (
+                <details className="notice">
+                  <summary>已完成但尚未提交的作业</summary>
+                  {snapshot.learning.assignments
+                    .filter(
+                      (a) =>
+                        a.submission_state === 'unsubmitted' &&
+                        indexes.tasks.get(a.task_id)?.status === 'completed',
+                    )
+                    .map((a) => (
+                      <p key={a.id}>
+                        <a href={a.official_url} target="_blank" rel="noreferrer">
+                          {a.original_title} · 去 eLearning 提交 ↗
+                        </a>
+                      </p>
+                    ))}
+                </details>
+              )}
           </>
         )}
-        <footer>本机优先保存 · 重要的事，稳稳记住</footer>
       </main>
-      {newSchedule && (
-        <NewSchedule
-          title={title}
-          day={view === 'upcoming' ? plannedDay : ''}
+      {newTask && (
+        <TaskEditor
+          tasks={tasks}
           courses={courses}
-          selectedCourse={course}
-          save={(title, patch) =>
-            create(title, patch).then((result) => {
-              setTitle('');
-              return result;
-            })
-          }
-          close={() => setNewSchedule(false)}
+          files={snapshot.files}
+          templates={catalog.plans}
+          saveTemplate={saveTemplate}
+          title={title}
+          day={view === 'today' || view === 'upcoming' ? plannedDay : ''}
+          course={filters.course}
+          save={save}
+          create={create}
+          remove={remove}
+          close={() => {
+            setNewTask(false);
+            setTitle('');
+          }}
         />
       )}
       {active && (
-        <Detail
-          key={active.id + active.updated_at}
+        <TaskEditor
+          key={active.id}
           task={active}
           tasks={tasks}
           courses={courses}
-          assignment={snapshot.learning.assignments.find((a) => a.task_id === active.id)}
+          files={snapshot.files}
+          templates={catalog.plans}
+          saveTemplate={saveTemplate}
+          assignment={indexes.assignments.get(active.id)}
           save={save}
-          remove={remove}
           create={create}
+          remove={remove}
           close={() => setSelected(null)}
+          ask={ask}
         />
-      )}
+      )}{' '}
       {settings && (
-        <div className="modal-backdrop">
-          <section
-            className={`settings-modal${models && modelSettings ? ' settings-modal-models' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="设置与同步"
-          >
-            <div className="detail-heading">
-              <h2>你的个人空间</h2>
-              <button onClick={() => setSettings(false)} aria-label="关闭设置">
-                ✕
-              </button>
-            </div>
-            <SetupGuide snapshot={snapshot} />
-            <p>
-              当前项目：{snapshot.projectUrl || '尚未配置'} ·{' '}
-              {snapshot.connected ? '同步空间已连接' : '尚未连接'}
-            </p>
-
-            <label>
-              外观
-              <select
-                value={catalog.theme}
-                onChange={(e) =>
-                  void run(() =>
-                    api.catalog({
-                      ...catalog,
-                      theme: e.target.value as 'system' | 'light' | 'dark',
-                    }),
-                  ).catch(() => {})
-                }
-              >
-                <option value="system">跟随系统</option>
-                <option value="light">浅色</option>
-                <option value="dark">深色</option>
-              </select>
-            </label>
-            {!snapshot.connected && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const f = new FormData(e.currentTarget);
-                  void run(() =>
-                    api.configure({ url: String(f.get('url')), key: String(f.get('key')) }),
-                  ).catch(() => {});
-                }}
-              >
-                <label>
-                  Project URL
-                  <input
-                    name="url"
-                    type="url"
-                    placeholder="https://你的项目.supabase.co"
-                    defaultValue={snapshot.projectUrl}
-                    required
-                  />
-                </label>
-                <label>
-                  公开 publishable / anon key
-                  <input name="key" required autoComplete="off" />
-                </label>
-                <small>不需要 service_role、模型密钥或校园密码。先按项目初始化说明应用 SQL。</small>
-                <button className="primary">保存云端配置</button>
-              </form>
-            )}
-            {snapshot.configured && !snapshot.connected && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const f = new FormData(e.currentTarget);
-                  const code = String(f.get('code'));
-                  e.currentTarget.reset();
-                  void run(() => api.connectCode(code, f.get('import') === 'on')).catch(() => {});
-                }}
-              >
-                <label>
-                  同步码
-                  <input
-                    name="code"
-                    type="password"
-                    autoComplete="off"
-                    required
-                    minLength={12}
-                    maxLength={128}
-                    placeholder="输入两端共用的同步码"
-                  />
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" name="import" />
-                  将本机离线任务导入同步空间
-                </label>
-                <button className="primary">连接并同步</button>
-              </form>
-            )}
-            {snapshot.connected && (
-              <p>
-                同步空间已连接
-                <button onClick={() => void run(() => api.logout()).catch(() => {})}>
-                  断开同步
-                </button>
-              </p>
-            )}
-            <section className="elearning-settings">
-              <h3>手机 AI 配置</h3>
-              <p>
-                在同一 Supabase 项目执行 004 配额迁移，设置服务端秘密 FDU_AI_KEY（DeepSeek 密钥）和
-                FDU_AI_MODEL（你账户可用的模型名称），部署 ai
-                函数。手机只需输入同步码连接，无需输入模型密钥，也不需要电脑开机。每次调用会计费，当前限制每天最多
-                30 次、间隔 10 秒。桌面模型在“模型与工具配置”中独立设置。
-              </p>
-            </section>
-            <section className="elearning-settings">
-              <h3>eLearning 连接</h3>
-              <p>Windows 本机只读获取学校数据，再同步到本人云端。手机使用已同步的课程缓存。</p>
-              <p>电脑关闭时手机不拉取学校新数据。两次本机读取至少间隔一分钟。</p>
-              <LearningConnection
-                api={api}
-                snapshot={snapshot}
-                refresh={() =>
-                  void run(() =>
-                    desktopLearning ? desktopLearning.refresh() : api.refreshElearning(),
-                  ).catch(() => {})
-                }
-                desktop={desktopLearning}
-              />
-            </section>
-            {modelSettings && (
-              <>
-                <button onClick={() => setModels(!models)}>模型与工具配置</button>
-                {models && <div className="native-settings">{modelSettings}</div>}
-              </>
-            )}
-            <button onClick={() => void download()}>导出本机数据备份</button>
-            <button
-              onClick={() => {
-                void api
-                  .export()
-                  .then(async (raw) => {
-                    const { fullBackup } = await import('./Library.tsx');
-                    const { blob, count } = await fullBackup(raw);
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = 'FDU-Agent-full-backup.zip';
-                    a.click();
-                    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-                    setError(
-                      `完整备份已导出，包含${count}份本机文件；未下载的云端原文件不包含在包内。`,
-                    );
-                  })
-                  .catch((e) => setError(String(e)));
-              }}
-            >
-              导出完整备份 ZIP
-            </button>
-            <label>
-              恢复完整备份
-              <input
-                aria-label="恢复完整备份"
-                type="file"
-                accept=".zip"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!file) return;
-                  void import('./Library.tsx')
-                    .then(async ({ readFullBackup }) => {
-                      const backup = await readFullBackup(file);
-                      const tasks = readBackup(backup.data);
-                      if (
-                        confirm(`恢复 ${tasks.length} 项任务副本及资料索引？已有任务和文件将保留。`)
-                      ) {
-                        await backup.commit();
-                        await run(() => api.restoreBackup(backup.data));
-                      }
-                    })
-                    .catch((e) => setError(String(e)));
-                }}
-              />
-            </label>
-            <label>
-              从任务 JSON 备份恢复副本
-              <input
-                aria-label="恢复任务备份"
-                type="file"
-                accept=".json"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!file) return;
-                  void file
-                    .text()
-                    .then(async (text) => {
-                      if (text.length > 10_000_000) throw new Error('备份过大');
-                      const data: unknown = JSON.parse(text);
-                      const tasks = readBackup(data);
-                      if (
-                        confirm(
-                          `恢复 ${tasks.length} 项任务为新副本？现有任务会保留；课程不存在时转为个人任务。`,
-                        )
-                      )
-                        await run(() => api.restoreBackup(data));
-                    })
-                    .catch((e) => setError(String(e)));
-                }}
-              />
-            </label>
-            <button
-              onClick={() => {
-                if ('Notification' in window)
-                  void Notification.requestPermission().then((permission) => {
-                    if (permission !== 'granted') setError('系统通知未授权，应用内提醒仍可用');
-                  });
-                else setError('当前环境不支持系统通知');
-              }}
-            >
-              允许系统提醒
-            </button>
-            <small>
-              提醒在应用打开时检查；关闭或锁屏后的 iPhone 推送尚未接入，不保证后台执行。
-            </small>
-            <p className="install-tip">
-              iPhone：用 Safari 打开 HTTPS 地址 → 分享 →
-              添加到主屏幕。应用关闭或锁屏后不保证后台同步。
-            </p>
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
-            )}
-          </section>
-        </div>
+        <Settings
+          api={api}
+          snapshot={snapshot}
+          run={run}
+          close={() => {
+            setSettings(false);
+            setOpenModels(false);
+          }}
+          openModels={openModels}
+          modelSettings={modelSettings}
+          desktopLearning={desktopLearning}
+        />
       )}
     </div>
   );

@@ -1,1 +1,0 @@
-export{n as proposalSchema}from"./drafts-DxbTkVHM.js";

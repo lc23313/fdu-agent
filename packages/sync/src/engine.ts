@@ -22,6 +22,7 @@ export class SyncEngine {
   readonly store: Store;
   readonly transport: Transport;
   private active: Promise<void> | null = null;
+  canPush: (operation: import('./types.ts').Pending) => boolean = () => true;
   constructor(store: Store, transport: Transport) {
     this.store = store;
     this.transport = transport;
@@ -47,7 +48,12 @@ export class SyncEngine {
     try {
       for (let count = 0; count < 1000; count++) {
         const prepared = await this.store.update((state) => {
-          const op = state.pending.find((item) => !item.blocked);
+          const op = state.pending.find(
+            (item, index) =>
+              !item.blocked &&
+              this.canPush(item) &&
+              !state.pending.slice(0, index).some((before) => before.entity_id === item.entity_id),
+          );
           if (!op) return null;
           op.request ??= operationSchema.parse({
             operation_id: op.local_id,
@@ -68,7 +74,20 @@ export class SyncEngine {
             (result.task.user_id !== state.user_id || result.task.id !== op.entity_id)
           )
             throw new SyncError('服务器返回了不属于此操作的数据', 'invalid');
-          if (result.status === 'conflict') {
+          const satisfied =
+            result.task &&
+            (op.action === 'delete'
+              ? !!result.task.deleted_at
+              : !result.task.deleted_at &&
+                (op.action === 'restore' ||
+                  Object.entries(op.patch ?? {}).every(([key, value]) =>
+                    key.endsWith('_at') && typeof value === 'string'
+                      ? Date.parse(value) ===
+                        Date.parse(String(result.task![key as keyof typeof result.task]))
+                      : JSON.stringify(value ?? null) ===
+                        JSON.stringify(result.task![key as keyof typeof result.task] ?? null),
+                  )));
+          if (result.status === 'conflict' && !satisfied) {
             const local = projectTask(state, op.entity_id);
             state.conflicts.push({
               id: op.local_id,
@@ -80,6 +99,7 @@ export class SyncEngine {
             for (const item of state.pending)
               if (item.entity_id === op.entity_id) item.blocked = true;
           } else {
+            if (!result.task) throw new SyncError('服务器未返回已确认的任务', 'invalid');
             if ((state.shadow[result.task.id]?.version ?? 0) <= result.task.version)
               state.shadow[result.task.id] = result.task;
             state.pending = state.pending.filter((item) => item.local_id !== op.local_id);

@@ -45,7 +45,11 @@ export function PlanCalendar({
         <button onClick={() => shift(-1)} aria-label={mode === 'week' ? '上一周' : '上一月'}>
           ‹
         </button>
-        <span>{mode === 'month' ? anchor.slice(0, 7) : `${dateKey(start)} 起的一周`}</span>
+        <span>
+          {mode === 'month'
+            ? current.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+            : `${start.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}起的一周`}
+        </span>
         <button onClick={() => shift(1)} aria-label={mode === 'week' ? '下一周' : '下一月'}>
           ›
         </button>
@@ -87,12 +91,16 @@ export function PlanCalendar({
                   <button className="calendar-task" key={t.id} onClick={() => open(t.id)}>
                     {t.title}
                     <small>
-                      {t.due_at
-                        ? new Date(t.due_at).toLocaleTimeString('zh-CN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : '已安排'}
+                      {t.time_kind === 'day'
+                        ? '未定时'
+                        : t.time_kind === 'range' && t.start_at && t.due_at
+                          ? `${new Date(t.start_at).toTimeString().slice(0, 5)}–${new Date(t.due_at).toTimeString().slice(0, 5)}`
+                          : t.due_at
+                            ? new Date(t.due_at).toLocaleTimeString('zh-CN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }) + ' 截止'
+                            : '已安排'}
                     </small>
                   </button>
                 ))}

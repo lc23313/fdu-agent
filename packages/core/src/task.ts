@@ -15,6 +15,16 @@ export const taskFields = z.strictObject({
   reminders: z
     .array(z.strictObject({ minutes_before: z.number().int().min(0).max(525600) }))
     .max(10),
+  time_kind: z.enum(['day', 'deadline', 'range']).nullable().optional(),
+  repeat: z
+    .object({
+      frequency: z.enum(['daily', 'weekly', 'monthly']),
+      interval: z.number().int().min(1).max(52),
+      until: z.iso.date().optional(),
+    })
+    .strict()
+    .nullable()
+    .optional(),
 });
 export const taskCreatePatchSchema = taskFields.partial();
 export const taskPatchSchema = taskCreatePatchSchema.refine(

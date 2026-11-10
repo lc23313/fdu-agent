@@ -1,0 +1,1 @@
+export{n as proposalSchema}from"./drafts-wjmq_D0E.js";

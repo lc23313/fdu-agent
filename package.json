@@ -1,6 +1,6 @@
 {
   "name": "fdu-agent-pwa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "license": "GPL-3.0-or-later",
@@ -17,9 +17,14 @@
     "@supabase/supabase-js": "2.118.0",
     "dexie": "4.4.7",
     "jszip": "3.10.1",
+    "katex": "0.16.47",
     "pdfjs-dist": "6.3.289",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-math": "6.0.0",
     "zod": "4.5.4"
   },
   "devDependencies": {

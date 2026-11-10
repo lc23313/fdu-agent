@@ -23,6 +23,191 @@
 .fdu-app * {
   box-sizing: border-box;
 }
+.fdu-app [hidden] {
+  display: none !important;
+}
+.fdu-app .task-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0 12px;
+}
+.fdu-app .task-toolbar input {
+  flex: 1;
+  min-width: 0;
+}
+.fdu-app .bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+}
+.fdu-app .task-toolbar button {
+  flex-shrink: 0;
+}
+.fdu-app .list-heading select {
+  max-width: 130px;
+  padding: 5px 8px;
+}
+.fdu-app .quick-add {
+  gap: 8px;
+}
+.fdu-app .quick-add input {
+  flex: 1;
+  min-width: 0;
+}
+.fdu-app .task-row {
+  min-height: 72px;
+}
+.fdu-app .task-row.is-child {
+  padding-left: 28px;
+}
+.fdu-app .task-open span {
+  overflow-wrap: anywhere;
+}
+.fdu-app .action-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 85;
+  background: var(--fdu-surface);
+  border: 1px solid var(--fdu-line);
+  box-shadow: 0 6px 30px #0002;
+  padding: 8px 14px;
+  border-radius: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 90vw;
+}
+.fdu-app .editor-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--fdu-surface);
+  padding: 12px 0;
+  border-top: 1px solid var(--fdu-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fdu-app .settings-modal > details {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--fdu-line);
+}
+.fdu-app summary {
+  cursor: pointer;
+  min-height: 36px;
+  display: list-item;
+}
+.fdu-app .settings-modal:focus {
+  outline: none;
+}
+.fdu-app .settings-modal {
+  overscroll-behavior: contain;
+}
+.fdu-app .markdown-text {
+  overflow-wrap: anywhere;
+}
+.fdu-app .markdown-text pre {
+  overflow: auto;
+  max-width: 100%;
+}
+.fdu-app .markdown-text table,
+.fdu-app .notice table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+.fdu-app .markdown-text td,
+.fdu-app .markdown-text th,
+.fdu-app .notice td {
+  padding: 6px;
+  border: 1px solid var(--fdu-line);
+  overflow-wrap: anywhere;
+}
+.fdu-app .markdown-text .katex-display {
+  overflow: auto;
+  padding: 6px 0;
+}
+@media (max-width: 650px) {
+  .fdu-app .fdu-main {
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+  .fdu-app header {
+    margin-bottom: 16px;
+  }
+  .fdu-app .page-title h1 {
+    font-size: 28px;
+    margin: 4px 0;
+  }
+  .fdu-app .quick-add {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+  .fdu-app .quick-add input {
+    flex-basis: 100%;
+  }
+  .fdu-app .quick-add button {
+    flex: 1;
+  }
+  .fdu-app .task-toolbar {
+    gap: 6px;
+  }
+  .fdu-app .task-toolbar button {
+    padding: 8px;
+  }
+  .fdu-app .action-toast {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .fdu-app .task-row {
+    min-height: 84px;
+    gap: 8px;
+  }
+  .fdu-app .task-row .due {
+    max-width: 100px;
+    padding: 8px 2px;
+  }
+  .fdu-app .task-row input[type='checkbox'] {
+    min-width: 24px;
+    min-height: 24px;
+    margin: 10px 4px;
+  }
+  .fdu-app .mobile-nav svg {
+    width: 23px;
+    height: 23px;
+  }
+  .fdu-app .modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .fdu-app .settings-modal {
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+  }
+  .fdu-app .time-editor .view-tabs {
+    flex-wrap: wrap;
+  }
+  .fdu-app .week-grid .calendar-task {
+    display: none;
+  }
+  .fdu-app button:where(:not(.fdu-native *)) {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fdu-app *,
+  .fdu-app *::before,
+  .fdu-app *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
 .fdu-app button:where(:not(.fdu-native *)),
 .fdu-app input:where(:not(.fdu-native *)),
 .fdu-app select:where(:not(.fdu-native *)),
@@ -943,7 +1128,7 @@ body:has(.fdu-app) {
   .course-list form {
     flex-wrap: wrap;
   }
-  .course-list input {
+  .course-list input:not([type='checkbox']) {
     flex: 1;
   }
   .fdu-main {

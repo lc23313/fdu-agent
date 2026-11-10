@@ -1,0 +1,1197 @@
+.fdu-app {
+  --fdu-font:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --fdu-paper: #f8f9f6;
+  --fdu-surface: #ffffff;
+  --fdu-ink: #253c33;
+  --fdu-dim: #6b776f;
+  --fdu-line: #e1e7df;
+  --fdu-accent: #285a46;
+  --fdu-wash: #eaf0e7;
+  font-family: var(--fdu-font);
+  font-weight: 400;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+}
+.fdu-app button:where(:not(.fdu-native *)) {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  min-height: 36px;
+  border-radius: 9px;
+  transition:
+    background-color 140ms,
+    border-color 140ms,
+    box-shadow 140ms,
+    color 140ms;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.fdu-app button:where(:not(.fdu-native *)):disabled {
+  cursor: default;
+}
+.fdu-app input:where(:not(.fdu-native *)),
+.fdu-app select:where(:not(.fdu-native *)),
+.fdu-app textarea:where(:not(.fdu-native *)) {
+  font-weight: 400;
+  line-height: 1.5;
+  border-radius: 9px;
+}
+.fdu-app input::placeholder,
+.fdu-app textarea::placeholder {
+  color: #89958c;
+  opacity: 1;
+}
+.fdu-app input:where(:not(.fdu-native *)):focus-visible,
+.fdu-app select:where(:not(.fdu-native *)):focus-visible,
+.fdu-app textarea:where(:not(.fdu-native *)):focus-visible {
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+.fdu-app h1:where(:not(.fdu-native *)) {
+  font-size: 30px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  font-weight: 600;
+}
+.fdu-app h2:where(:not(.fdu-native *)) {
+  font-size: 20px;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.fdu-app h3:where(:not(.fdu-native *)) {
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.fdu-app .fdu-nav {
+  background: #f0f3ec;
+  width: 228px;
+  padding: 32px 16px 24px;
+}
+.fdu-app .brand {
+  gap: 10px;
+  padding: 0 12px;
+  font-size: 17px;
+  letter-spacing: -0.2px;
+  margin-bottom: 24px;
+}
+.fdu-app .brand img {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  box-shadow: 0 3px 10px #15392a12;
+}
+.fdu-app .brand small {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  margin-top: 3px;
+}
+.fdu-app .nav-group {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 18px 13px 7px;
+}
+.fdu-app .nav-links {
+  gap: 4px;
+}
+.fdu-app .nav-links button {
+  padding: 11px 13px;
+  gap: 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 400;
+}
+.fdu-app .nav-links .active {
+  background: #dfe9db;
+  color: #234e3b;
+  font-weight: 600;
+}
+.fdu-app .nav-links button small {
+  min-width: 20px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 400;
+}
+.fdu-app .nav-links .active small {
+  color: #44664f;
+}
+.fdu-app .nav-icon svg {
+  width: 19px;
+  height: 19px;
+}
+.fdu-app .nav-bottom button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--fdu-dim);
+}
+.fdu-app .nav-bottom button svg {
+  width: 17px;
+  height: 17px;
+}
+.fdu-app .nav-bottom > small {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  opacity: 0.8;
+}
+.fdu-app .fdu-main {
+  max-width: 1160px;
+  padding: 36px clamp(28px, 4.4vw, 64px) 40px;
+  scrollbar-width: thin;
+}
+.fdu-main > header {
+  display: grid;
+  grid-template-areas: 'date date' 'title sync';
+  grid-template-columns: 1fr auto;
+  gap: 7px 16px;
+  margin-bottom: 24px;
+}
+.fdu-main > header .eyebrow {
+  grid-area: date;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  margin: 0;
+}
+.fdu-main > header .page-title {
+  grid-area: title;
+}
+.fdu-main > header .sync-line {
+  grid-area: sync;
+  margin: 0;
+  font-size: 11px;
+  align-self: center;
+}
+.fdu-app .sync-line button {
+  min-height: 28px;
+  font-size: 11px;
+  color: var(--fdu-accent);
+}
+.fdu-app .quick-add {
+  flex-wrap: nowrap;
+  display: flex;
+  padding: 7px 8px 7px 15px;
+  gap: 6px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #24382f04;
+  transition:
+    border-color 140ms,
+    box-shadow 140ms;
+}
+.fdu-app .quick-add:focus-within {
+  border-color: color-mix(in srgb, var(--fdu-accent) 55%, var(--fdu-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fdu-accent) 7%, transparent);
+}
+.fdu-app .quick-add input {
+  flex: 1;
+  flex-basis: auto;
+  width: 0;
+  min-height: 38px;
+  font-size: 14px;
+  background: transparent;
+}
+.fdu-app .quick-add input:focus-visible {
+  outline: none;
+}
+.fdu-app .quick-add button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  white-space: nowrap;
+  padding: 8px 12px;
+}
+.fdu-app .quick-add button svg {
+  width: 16px;
+  height: 16px;
+}
+.fdu-app .quick-detail {
+  color: var(--fdu-dim);
+  border-color: transparent;
+  background: transparent;
+}
+.fdu-app .today-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 9px;
+  padding: 0;
+  font-size: 11px;
+}
+.fdu-app .today-progress button {
+  padding: 0 5px;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--fdu-accent);
+  font-size: 11px;
+}
+.fdu-app .task-toolbar {
+  gap: 8px;
+  margin: 24px 0 12px;
+}
+.fdu-app label.task-search {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--fdu-line);
+  border-radius: 9px;
+  background: var(--fdu-surface);
+}
+.fdu-app .task-search > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--fdu-dim);
+}
+.fdu-app .task-search input {
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  min-height: 38px;
+  width: 100%;
+  font-size: 12px;
+  background: transparent;
+}
+.fdu-app .task-search input:focus-visible {
+  outline: none;
+}
+.fdu-app .task-search:focus-within {
+  outline: 2px solid var(--fdu-accent);
+  outline-offset: 2px;
+}
+.fdu-app .task-search kbd {
+  font: 10px/1.4 var(--fdu-font);
+  color: var(--fdu-dim);
+  border: 1px solid var(--fdu-line);
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.fdu-app .task-toolbar > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 9px 10px;
+}
+.fdu-app .task-toolbar > button svg {
+  width: 15px;
+  height: 15px;
+}
+.fdu-app button[aria-pressed='true']:where(:not(.fdu-native *)) {
+  background: var(--fdu-wash);
+  color: var(--fdu-accent);
+  border-color: color-mix(in srgb, var(--fdu-accent) 30%, var(--fdu-line));
+}
+.fdu-app .list-heading {
+  align-items: center;
+  padding: 10px 0;
+  font-size: 11px;
+}
+.fdu-app .list-heading select {
+  background: transparent;
+  border-color: transparent;
+  font-size: 11px;
+}
+.fdu-app .task-row {
+  min-height: 76px;
+  padding: 13px 0;
+  gap: 10px;
+  transition: background-color 120ms;
+  border-color: color-mix(in srgb, var(--fdu-line) 80%, transparent);
+}
+.fdu-app .task-row:hover {
+  background: color-mix(in srgb, var(--fdu-wash) 40%, transparent);
+}
+.fdu-app label.task-check {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  cursor: pointer;
+}
+.fdu-app .task-check input[type='checkbox'] {
+  appearance: none;
+  width: 19px;
+  height: 19px;
+  min-width: 19px;
+  min-height: 19px;
+  margin: 0;
+  border: 1.5px solid #a7b5a8;
+  border-radius: 7px;
+  background-color: var(--fdu-surface);
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    box-shadow 120ms;
+  cursor: pointer;
+}
+.fdu-app .task-check:hover input {
+  border-color: var(--fdu-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fdu-accent) 8%, transparent);
+}
+.fdu-app .task-check input:checked {
+  background-color: var(--fdu-accent);
+  border-color: var(--fdu-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10 3 3 7-7' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.fdu-app .priority-3 .task-check input {
+  border-color: #bd7962;
+}
+.fdu-app .priority-3 .task-open > span:after {
+  content: '';
+}
+.fdu-app .task-open > span {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+.fdu-app .task-open small {
+  font-size: 11px;
+  line-height: 1.65;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.fdu-app label.task-date {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  position: relative;
+  margin: 0;
+  padding: 6px 8px;
+  min-height: 36px;
+  flex-shrink: 0;
+  color: var(--fdu-dim);
+  border-radius: 7px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fdu-app .task-date svg {
+  width: 13px;
+  height: 13px;
+}
+.fdu-app .task-date:hover {
+  background: var(--fdu-wash);
+  color: var(--fdu-accent);
+}
+.fdu-app .task-date:focus-within {
+  outline: 2px solid var(--fdu-accent);
+  outline-offset: 2px;
+}
+.fdu-app .task-date input.due {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  opacity: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.fdu-app .task-date.overdue {
+  color: #a45242;
+}
+.fdu-app .action-toast {
+  min-width: 260px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 7px 10px 7px 14px;
+  gap: 9px;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 40px #152a2314,
+    0 2px 5px #152a2308;
+  font-size: 13px;
+  animation: fdu-toast-in 170ms ease-out;
+}
+.fdu-app .action-toast > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--fdu-accent);
+  flex-shrink: 0;
+}
+.fdu-app .action-toast > span {
+  flex: 1;
+  min-width: 0;
+}
+.fdu-app .action-toast button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fdu-accent);
+}
+.fdu-app .action-toast button[aria-label='关闭提示'] {
+  color: var(--fdu-dim);
+  padding: 6px;
+  width: 32px;
+}
+.fdu-app .modal-backdrop {
+  background: #14291f40;
+  backdrop-filter: blur(6px);
+}
+.fdu-app .settings-modal {
+  max-width: 560px;
+  max-height: min(90dvh, calc(var(--fdu-dialog-height, 100dvh) - 32px));
+  padding: 24px;
+  border-radius: 18px;
+  border-color: color-mix(in srgb, var(--fdu-line) 70%, transparent);
+  box-shadow:
+    0 20px 100px #10251b26,
+    0 2px 10px #10251b0a;
+  scrollbar-width: thin;
+  animation: fdu-dialog-in 160ms ease-out;
+}
+.fdu-app .settings-modal-models {
+  max-width: 1100px;
+}
+.fdu-app .settings-modal > .detail-heading {
+  position: sticky;
+  top: -24px;
+  z-index: 3;
+  margin: -24px -24px 18px;
+  padding: 18px 20px 14px 24px;
+  background: var(--fdu-surface);
+  border-bottom: 1px solid var(--fdu-line);
+}
+.fdu-app .detail-heading button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--fdu-dim);
+  font-size: 18px;
+}
+.fdu-app .settings-modal > details {
+  padding: 16px 0;
+}
+.fdu-app .settings-modal summary {
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 30px;
+  padding: 3px 0;
+}
+.fdu-app .settings-modal summary::marker {
+  font-size: 9px;
+  color: var(--fdu-dim);
+}
+.fdu-app .settings-modal p {
+  line-height: 1.8;
+}
+.fdu-app .task-editor {
+  max-width: 600px;
+}
+.fdu-app .editor-hint {
+  color: var(--fdu-dim);
+  font-size: 11px;
+  margin: -4px 0 18px;
+}
+.fdu-app .task-editor input[name='title'] {
+  font-size: 18px;
+  line-height: 1.6;
+  padding: 12px;
+  letter-spacing: 0.01em;
+}
+.fdu-app .task-editor label {
+  font-size: 12px;
+  line-height: 1.6;
+  gap: 7px;
+  margin: 16px 0;
+}
+.fdu-app .task-editor textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.fdu-app .time-editor {
+  border: 1px solid var(--fdu-line);
+  background: var(--fdu-paper);
+  padding: 14px;
+  border-radius: 12px;
+  margin: 18px 0;
+}
+.fdu-app .time-editor > .view-tabs {
+  padding: 3px;
+  background: color-mix(in srgb, var(--fdu-line) 55%, transparent);
+  gap: 3px;
+  border-radius: 8px;
+  margin: 0 0 14px;
+  flex-wrap: nowrap;
+}
+.fdu-app .time-editor > .view-tabs button {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 7px 4px;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+}
+.fdu-app .time-editor > .view-tabs .selected {
+  background: var(--fdu-surface);
+  color: var(--fdu-accent);
+  box-shadow: 0 1px 4px #163b2510;
+}
+.fdu-app .date-shortcuts {
+  gap: 6px;
+}
+.fdu-app .date-shortcuts button {
+  padding: 5px 9px;
+  font-size: 11px;
+  min-height: 30px;
+  border-radius: 6px;
+}
+.fdu-app .editor-more {
+  border-top: 1px solid var(--fdu-line);
+  margin: 18px 0 0;
+  padding: 12px 0;
+}
+.fdu-app .editor-more > summary {
+  color: var(--fdu-dim);
+}
+.fdu-app .editor-more summary small {
+  font-size: 11px;
+  font-weight: 400;
+}
+.fdu-app .editor-add-note {
+  border-color: transparent;
+  background: transparent;
+  color: var(--fdu-dim);
+  padding-left: 0;
+  font-size: 12px;
+}
+.fdu-app .range-end-date {
+  margin-top: 14px;
+}
+.fdu-app .range-end-date > summary {
+  font-size: 11px;
+  color: var(--fdu-dim);
+}
+.fdu-app .range-end-date label {
+  margin-bottom: 0;
+}
+.fdu-app .editor-more > button {
+  margin: 12px 8px 0 0;
+}
+.fdu-app .editor-actions {
+  padding: 16px 24px 20px;
+  margin-left: -24px;
+  margin-right: -24px;
+  bottom: -24px;
+  gap: 10px;
+  align-items: center;
+  background: var(--fdu-surface);
+  border-top: 1px solid var(--fdu-line);
+  margin-top: 8px;
+}
+.fdu-app .editor-actions > .primary {
+  margin-left: auto;
+  padding: 10px 24px;
+  min-height: 40px;
+}
+.fdu-app .editor-actions > button:not(.primary) {
+  border: 0;
+  color: var(--fdu-dim);
+  padding: 9px 3px;
+}
+.fdu-app .editor-key {
+  margin-left: auto;
+  font-size: 10px;
+}
+.fdu-app .editor-key + .primary {
+  margin-left: 0;
+}
+.fdu-app .view-tabs:not(.time-editor *) {
+  gap: 6px;
+}
+.fdu-app .view-tabs .selected {
+  background: var(--fdu-wash);
+  color: var(--fdu-accent);
+  border-color: var(--fdu-line);
+}
+.fdu-app .calendar {
+  background: var(--fdu-surface);
+  border: 1px solid var(--fdu-line);
+  padding: 16px;
+  border-radius: 12px;
+}
+.fdu-app .calendar-heading {
+  gap: 8px;
+  padding-bottom: 14px;
+}
+.fdu-app .calendar-heading span {
+  font-size: 13px;
+  font-weight: 500;
+}
+.fdu-app .calendar-day {
+  border-radius: 8px;
+  border-color: transparent;
+}
+.fdu-app .calendar-day.is-today > button:first-child {
+  color: var(--fdu-accent);
+  font-weight: 600;
+}
+.fdu-app .calendar-task {
+  padding: 8px !important;
+  font-size: 11px;
+  text-align: left;
+}
+.fdu-app .file-row {
+  padding: 16px 0;
+}
+.fdu-app .file-row > button:first-child {
+  font-size: 13px;
+  font-weight: 500;
+}
+.fdu-app .file-row small {
+  font-size: 11px;
+  margin-top: 5px;
+  font-weight: 400;
+}
+.fdu-app .checkbox-label {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.fdu-app .checkbox-label input[type='checkbox'] {
+  flex: 0 0 18px;
+  margin: 0;
+}
+.fdu-app .learning-status {
+  padding: 12px 14px;
+  background: var(--fdu-surface);
+  border: 1px solid var(--fdu-line);
+  border-radius: 10px;
+  gap: 8px;
+  margin: 18px 0 24px;
+}
+.fdu-app .learning-status > small {
+  flex: 1;
+  font-size: 11px;
+}
+.fdu-app .learning-status > .view-tabs {
+  margin: 0;
+}
+.fdu-app .learning-status > .view-tabs button {
+  font-size: 11px;
+}
+.fdu-app .learning-options {
+  flex-basis: 100%;
+  padding-top: 7px;
+  border-top: 1px solid var(--fdu-line);
+}
+.fdu-app .learning-options > summary {
+  font-size: 11px;
+  color: var(--fdu-dim);
+  min-height: 26px;
+}
+.fdu-app .learning-options p {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.fdu-app .learning-warning {
+  color: #a45242;
+  font-size: 12px;
+}
+.fdu-app .course-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.fdu-app .course-list > input,
+.fdu-app .course-list > label,
+.fdu-app .course-list > form,
+.fdu-app .course-list > p {
+  grid-column: 1 / -1;
+}
+.fdu-app .course-list > input {
+  width: 100%;
+}
+.fdu-app .course-list > .checkbox-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+.fdu-app .course-list > button {
+  position: relative;
+  padding: 16px;
+  margin: 0;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.fdu-app .course-list > button::after {
+  content: '›';
+  position: absolute;
+  right: 12px;
+  top: 14px;
+  color: var(--fdu-dim);
+  font-size: 18px;
+}
+.fdu-app .course-list > button small {
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 6px;
+}
+.fdu-app .course-list > form {
+  margin-top: 12px;
+}
+.fdu-app .assistant-panel {
+  --fdu-line: inherit;
+  --fdu-accent: inherit;
+  --fdu-wash: inherit;
+}
+.fdu-app .assistant-panel:has(.ai-chat) {
+  height: auto;
+  min-height: 0;
+}
+.fdu-app .ai-chat {
+  max-width: 720px;
+  width: 100%;
+  margin: 12px auto;
+  padding: 0 0 24px;
+}
+.fdu-app .ai-chat-actions {
+  justify-content: flex-end;
+  margin: 0 0 20px;
+}
+.fdu-app .ai-welcome {
+  text-align: center;
+  padding: 26px 0 24px;
+}
+.fdu-app .ai-welcome-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: var(--fdu-wash);
+  color: var(--fdu-accent);
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+.fdu-app .ai-welcome-icon svg {
+  width: 25px;
+  height: 25px;
+}
+.fdu-app .ai-welcome h2 {
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 9px;
+}
+.fdu-app .ai-welcome p {
+  font-size: 12px;
+  color: var(--fdu-dim);
+}
+.fdu-app .ai-starters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 24px;
+}
+.fdu-app .ai-starters button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  min-height: 48px;
+  padding: 12px;
+  font-size: 12px;
+}
+.fdu-app .ai-starters span {
+  color: var(--fdu-dim);
+}
+.fdu-app .ai-chat form.ai-composer {
+  display: block;
+  background: var(--fdu-surface);
+  border: 1px solid var(--fdu-line);
+  padding: 12px;
+  border-radius: 14px;
+}
+.fdu-app .ai-composer:focus-within {
+  border-color: var(--fdu-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fdu-accent) 7%, transparent);
+}
+.fdu-app .ai-composer textarea {
+  border: 0;
+  min-height: 90px;
+  padding: 4px;
+  background: transparent;
+  outline: none !important;
+  resize: vertical;
+}
+.fdu-app .ai-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.fdu-app .ai-composer-bar small {
+  font-size: 11px;
+}
+.fdu-app .ai-composer-bar .primary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
+}
+.fdu-app .ai-composer-bar svg {
+  width: 15px;
+  height: 15px;
+}
+.fdu-app .ai-scope-note {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  margin-top: 12px;
+}
+.fdu-app .chat-message {
+  margin: 14px 0;
+  font-size: 14px;
+  line-height: 1.85;
+}
+.fdu-app .chat-message.user {
+  max-width: 90%;
+  margin-left: auto;
+}
+.fdu-app .markdown-text p + p {
+  margin-top: 10px;
+}
+.fdu-app .time-editor > .view-tabs .selected {
+  background: var(--fdu-surface) !important;
+  border-color: transparent !important;
+}
+.fdu-windowbar {
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', sans-serif;
+  background: #f0f3ec;
+  font-size: 11px;
+}
+html.dark .fdu-app {
+  --fdu-paper: #18251e;
+  --fdu-surface: #213027;
+  --fdu-ink: #e8eee5;
+  --fdu-dim: #acb9ad;
+  --fdu-line: #34463a;
+  --fdu-accent: #a3c8ab;
+  --fdu-wash: #2b4032;
+}
+html.dark .fdu-app .fdu-nav,
+html.dark .fdu-windowbar {
+  background: #1c2b21;
+  color: #bfd2c2;
+}
+html.dark .fdu-app .nav-links .active {
+  background: #304a35;
+  color: #e4efdf;
+}
+html.dark .fdu-app .nav-links .active small {
+  color: #b0c4b0;
+}
+html.dark .fdu-app .primary:where(:not(.fdu-native *)) {
+  background: #a3c8ab;
+  color: #182b1e;
+  border-color: #a3c8ab;
+}
+html.dark .fdu-app .primary:where(:not(.fdu-native *)):hover {
+  background: #b4d5b9;
+  color: #182b1e;
+}
+html.dark .fdu-app input::placeholder,
+html.dark .fdu-app textarea::placeholder {
+  color: #8fa491;
+}
+html.dark .fdu-app .task-date.overdue {
+  color: #e4a18a;
+}
+@keyframes fdu-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fdu-toast-in {
+  from {
+    opacity: 0;
+    bottom: 15px;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 900px) {
+  .fdu-app .fdu-nav {
+    width: 204px;
+  }
+  .fdu-app .fdu-main {
+    padding: 28px;
+  }
+  .fdu-app .task-search kbd {
+    display: none;
+  }
+}
+@media (max-width: 650px) {
+  .fdu-app .fdu-main {
+    padding: calc(20px + env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 24px
+      max(18px, env(safe-area-inset-left));
+  }
+  .fdu-main > header {
+    display: block;
+    margin-bottom: 20px;
+  }
+  .fdu-main > header .eyebrow {
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+  .fdu-app .page-title h1 {
+    font-size: 28px;
+    margin: 0;
+  }
+  .fdu-app .mobile-settings {
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    width: 44px;
+    height: 44px;
+  }
+  .fdu-app .mobile-settings svg {
+    width: 20px;
+    height: 20px;
+  }
+  .fdu-main > header .sync-line {
+    margin-top: 9px;
+    gap: 6px;
+  }
+  .fdu-app .quick-add {
+    padding: 5px 6px 5px 12px;
+    gap: 4px;
+  }
+  .fdu-app .quick-add input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .fdu-app .quick-add button {
+    min-height: 44px;
+    padding: 8px 10px;
+  }
+  .fdu-app .quick-add .primary > svg {
+    display: none;
+  }
+  .fdu-app .quick-detail {
+    width: 44px;
+    border-left: 1px solid var(--fdu-line);
+    border-radius: 0;
+    padding: 8px !important;
+  }
+  .fdu-app .quick-detail span {
+    display: none;
+  }
+  .fdu-app .quick-detail svg {
+    width: 19px;
+    height: 19px;
+  }
+  .fdu-app .today-progress {
+    font-size: 11px;
+    margin-top: 8px;
+    gap: 5px;
+  }
+  .fdu-app .task-toolbar {
+    margin-top: 20px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .fdu-app label.task-search {
+    flex-basis: 150px;
+  }
+  .fdu-app .task-search input {
+    font-size: 16px;
+    min-height: 42px;
+    padding: 10px 0;
+  }
+  .fdu-app .task-toolbar > button {
+    min-height: 44px;
+    font-size: 11px;
+    gap: 3px;
+    padding: 7px;
+  }
+  .fdu-app .task-toolbar > button svg {
+    width: 14px;
+    height: 14px;
+  }
+  .fdu-app .task-row {
+    min-height: 80px;
+    padding: 13px 0;
+    gap: 5px;
+  }
+  .fdu-app .task-open > span {
+    font-size: 15px;
+  }
+  .fdu-app .task-open small {
+    font-size: 11px;
+  }
+  .fdu-app label.task-check {
+    flex-basis: 44px;
+    width: 44px;
+  }
+  .fdu-app label.task-date {
+    font-size: 11px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 5px;
+    gap: 3px;
+  }
+  .fdu-app .task-date svg {
+    display: none;
+  }
+  .fdu-app .action-toast {
+    left: 18px;
+    right: 18px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    transform: none;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    font-size: 12px;
+    padding: 8px 10px 8px 12px;
+  }
+  .fdu-app .action-toast button {
+    min-height: 36px;
+  }
+  .fdu-app .mobile-nav {
+    background: color-mix(in srgb, var(--fdu-surface) 94%, transparent);
+    padding-top: 6px;
+  }
+  .fdu-app .mobile-nav button {
+    font-size: 10px;
+    gap: 2px;
+    border-radius: 12px;
+    margin: 0 3px;
+    font-weight: 400;
+  }
+  .fdu-app .mobile-nav button svg {
+    width: 21px;
+    height: 21px;
+  }
+  .fdu-app .mobile-nav .active {
+    color: var(--fdu-accent);
+    background: transparent;
+  }
+  .fdu-app .mobile-nav .active svg {
+    background: var(--fdu-wash);
+    box-shadow:
+      0 0 0 5px var(--fdu-wash),
+      7px 0 0 5px var(--fdu-wash),
+      -7px 0 0 5px var(--fdu-wash);
+    border-radius: 5px;
+  }
+  .fdu-app .modal-backdrop {
+    padding: 0;
+  }
+  .fdu-app .settings-modal {
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: calc(var(--fdu-dialog-height, 100dvh) - env(safe-area-inset-top) - 12px);
+    border-radius: 20px 20px 0 0;
+  }
+  .fdu-app .settings-modal > .detail-heading {
+    top: -20px;
+    margin: -20px -18px 18px;
+    padding: 16px 16px 13px 20px;
+  }
+  .fdu-app .settings-modal .detail-heading h2 {
+    font-size: 19px;
+  }
+  .fdu-app .settings-modal button:where(:not(.fdu-native *)) {
+    min-height: 44px;
+  }
+  .fdu-app .time-editor {
+    padding: 12px;
+  }
+  .fdu-app .time-editor > .view-tabs button {
+    min-height: 40px;
+    font-size: 11px;
+  }
+  .fdu-app .date-shortcuts {
+    flex-wrap: nowrap;
+    gap: 5px;
+  }
+  .fdu-app .date-shortcuts button {
+    flex: 1;
+    padding: 5px 3px;
+    font-size: 10px;
+  }
+  .fdu-app .editor-key {
+    display: none;
+  }
+  .fdu-app .editor-actions > .primary {
+    margin-left: auto;
+    min-width: 120px;
+  }
+  .fdu-app .editor-actions {
+    margin-left: -18px;
+    margin-right: -18px;
+    padding: 12px 18px calc(20px + env(safe-area-inset-bottom));
+    bottom: calc(-20px - env(safe-area-inset-bottom));
+  }
+  .fdu-app .calendar {
+    padding: 10px;
+  }
+  .fdu-app .calendar-heading {
+    gap: 5px;
+  }
+  .fdu-app .calendar-heading span {
+    font-size: 11px;
+  }
+  .fdu-app .calendar-heading button {
+    padding: 6px 8px;
+  }
+  .fdu-app .course-list {
+    grid-template-columns: 1fr;
+  }
+  .fdu-app .ai-welcome {
+    padding-top: 14px;
+  }
+  .fdu-app .ai-starters {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-top: 20px;
+  }
+  .fdu-app .ai-starters button {
+    min-height: 44px;
+  }
+  .fdu-app .ai-composer-bar small {
+    font-size: 10px;
+  }
+  .fdu-app .ai-composer-bar button {
+    min-height: 42px;
+    font-size: 11px;
+  }
+  .fdu-app .ai-scope-note {
+    font-size: 10px;
+  }
+}

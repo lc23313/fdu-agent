@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Dexie, type Table } from 'dexie';
 import type { ClientApi, Snapshot } from '../../client/src/client.ts';
 import { fileSchema, type LibraryFile } from '../../library/src/schema.ts';
-import { documentText } from './document-text.ts';
+import { renderPdfPage, documentText } from './document-text.ts';
+import { MarkdownText } from './AiAssistant.tsx';
 const db = new Dexie('fdu-library-content');
 db.version(1).stores({ blobs: 'hash' });
 const blobs = db.table('blobs') as Table<{ hash: string; bytes: Uint8Array }, string>;
@@ -11,11 +12,13 @@ export function Library({
   snapshot,
   refresh,
   course = '',
+  openDocument,
 }: {
   api: ClientApi;
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
   course?: string;
+  openDocument?: string;
 }) {
   const [selected, setSelected] = useState<LibraryFile | null>(null),
     [url, setUrl] = useState(''),
@@ -26,14 +29,40 @@ export function Library({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [question, setQuestion] = useState(''),
-    [answer, setAnswer] = useState('');
+    [answer, setAnswer] = useState(''),
+    [localHashes, setLocalHashes] = useState<string[]>([]),
+    [history, setHistory] = useState(false),
+    [page, setPage] = useState(1),
+    [zoom, setZoom] = useState(100),
+    [progress, setProgress] = useState(''),
+    [models, setModels] = useState<
+      { provider: string; model: string; label: string; vision?: boolean }[]
+    >([]),
+    [model, setModel] = useState(''),
+    [qaModel, setQaModel] = useState('');
+  useEffect(() => {
+    void api
+      .documentModels()
+      .then(setModels)
+      .catch(() => {});
+  }, [api]);
+  useEffect(() => {
+    void blobs
+      .toCollection()
+      .primaryKeys()
+      .then((keys) => setLocalHashes(keys));
+  }, [snapshot.files]);
+  useEffect(() => {
+    if (selected && text !== selected.text)
+      localStorage.setItem('fdu-note-draft:' + selected.hash, text);
+  }, [selected, text]);
   useEffect(
     () => () => {
       if (url) URL.revokeObjectURL(url);
     },
     [url],
   );
-  const importFile = async (file: File) => {
+  const importFile = async (file: File, previous?: LibraryFile) => {
     setBusy(true);
     setError('');
     try {
@@ -45,13 +74,16 @@ export function Library({
       const ext = file.name.split('.').at(-1)!.toLowerCase();
       const old = snapshot.files.find((f) => f.hash === hash);
       const record = fileSchema.parse({
+        document_id: previous?.document_id ?? old?.document_id ?? crypto.randomUUID(),
+        previous_hash: previous?.hash ?? old?.previous_hash ?? null,
+        deleted_at: null,
         hash,
         name: old?.name ?? file.name,
         size: file.size,
         type: old?.type ?? ext,
         course_ids: [
           ...new Set([
-            ...(old?.course_ids ?? []),
+            ...(previous?.course_ids ?? old?.course_ids ?? []),
             ...(courseFilter && courseFilter !== '__unfiled' ? [courseFilter] : []),
           ]),
         ],
@@ -61,8 +93,12 @@ export function Library({
         version: 0,
       });
       await blobs.put({ hash, bytes });
+      if (previous && !previous.document_id)
+        await api.saveFile({ ...previous, document_id: record.document_id });
       await api.saveFile(record);
       await refresh();
+      setLocalHashes((before) => [...new Set([...before, hash])]);
+      return record;
     } catch (e) {
       setError(String(e));
     } finally {
@@ -71,9 +107,14 @@ export function Library({
   };
   const open = async (file: LibraryFile) => {
     setError('');
+    setProgress('正在打开资料…');
     try {
       let data = await blobs.get(file.hash);
       if (!data) {
+        if (!file.uploaded)
+          throw new Error(
+            '原文件尚未上传，暂时只在另一台设备。请在原设备上传或在本机导入同一文件。',
+          );
         const bytes = new Uint8Array(await api.downloadFile(file.hash));
         const actual = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
           .map((n) => n.toString(16).padStart(2, '0'))
@@ -83,7 +124,14 @@ export function Library({
         await blobs.put(data);
       }
       setSelected(file);
-      setText(file.text);
+      setPage(
+        Number(localStorage.getItem('fdu-reader-page:' + (file.document_id ?? file.hash))) || 1,
+      );
+      setZoom(
+        Number(localStorage.getItem('fdu-reader-zoom:' + (file.document_id ?? file.hash))) || 100,
+      );
+      setText(localStorage.getItem('fdu-note-draft:' + file.hash) ?? file.text);
+      setLocalHashes((before) => [...new Set([...before, file.hash])]);
       setAnswer('');
       setUrl(
         URL.createObjectURL(
@@ -94,8 +142,14 @@ export function Library({
       );
     } catch (e) {
       setError(String(e));
+    } finally {
+      setProgress('');
     }
   };
+  useEffect(() => {
+    const file = snapshot.files.find((f) => f.hash === openDocument?.split('#')[0]);
+    if (file) void open(file);
+  }, [openDocument]);
   return (
     <section className="file-library">
       <h2>资料库</h2>
@@ -178,7 +232,24 @@ export function Library({
       >
         新建 Markdown 笔记
       </button>
+      <label className="checkbox-label">
+        <input type="checkbox" checked={history} onChange={(e) => setHistory(e.target.checked)} />
+        显示历史版本与回收站
+      </label>
       {snapshot.files
+        .filter(
+          (f) =>
+            history ||
+            (!f.deleted_at &&
+              !snapshot.files.some(
+                (other) =>
+                  !other.deleted_at &&
+                  other.hash !== f.hash &&
+                  f.document_id &&
+                  other.document_id === f.document_id &&
+                  other.created_at > f.created_at,
+              )),
+        )
         .filter(
           (f) =>
             (!courseFilter ||
@@ -195,8 +266,16 @@ export function Library({
               {f.name}
               <small>
                 {f.type.toUpperCase()} · {Math.ceil(f.size / 1024)} KB ·{' '}
-                {f.uploaded ? '已上传' : '仅本机'} ·{' '}
-                {new Date(f.created_at).toLocaleString('zh-CN')}
+                {f.deleted_at
+                  ? '已移到回收站'
+                  : localHashes.includes(f.hash)
+                    ? f.uploaded
+                      ? '本机可读 · 云端已上传'
+                      : '本机可读 · 未上传'
+                    : f.uploaded
+                      ? '云端可下载'
+                      : '仅其他设备'}{' '}
+                · {new Date(f.created_at).toLocaleString('zh-CN')}
               </small>
             </button>
             <button
@@ -221,6 +300,7 @@ export function Library({
           </article>
         ))}
       {snapshot.materials
+        .filter((m) => m.kind !== 'announcement')
         .filter(
           (m) =>
             !courseFilter ||
@@ -250,7 +330,142 @@ export function Library({
             下载／用其他应用打开原文件
           </a>
           {selected.type === 'pdf' ? (
-            <iframe title="PDF 阅读" src={url} />
+            <>
+              <details>
+                <summary>扫描页识别 OCR（按需）</summary>
+                <p>
+                  当前文件已提取 {selected.text.replace(/\[第\d+页\]/g, '').trim().length}{' '}
+                  字；扫描页需识别。只发送当前页图片给所选视觉模型，可能计费。
+                </p>
+                {models.some((m) => m.vision) ? (
+                  <>
+                    <select
+                      aria-label="OCR 模型"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                    >
+                      <option value="">选择视觉模型</option>
+                      {models.map((m, i) =>
+                        m.vision ? (
+                          <option key={i} value={i}>
+                            {m.label}
+                          </option>
+                        ) : null,
+                      )}
+                    </select>
+                    <button
+                      disabled={busy || model === ''}
+                      onClick={() => {
+                        if (!confirm('将当前页发送给所选视觉模型识别？可能计费。')) return;
+                        setBusy(true);
+                        void blobs
+                          .get(selected.hash)
+                          .then(async (row) => {
+                            if (!row) throw new Error('请先下载原文件');
+                            const m = models[Number(model)]!;
+                            const image = await renderPdfPage(row.bytes, page);
+                            const ocr = await api.ocrDocument(image, m.provider, m.model);
+                            const combined =
+                              selected.text + '\n[第' + page + '页] OCR 校对稿\n' + ocr;
+                            if (combined.length > 60000) {
+                              const note = await importFile(
+                                new File(
+                                  [`# ${selected.name} 第 ${page} 页 OCR 校对稿\n\n${ocr}`],
+                                  `${selected.name}-第${page}页OCR.md`,
+                                  { type: 'text/markdown' },
+                                ),
+                              );
+                              if (note) {
+                                await api.saveFile({ ...note, course_ids: selected.course_ids });
+                                await refresh();
+                                setProgress('正文索引已满，识别结果已另存为 OCR 笔记。');
+                              }
+                              return;
+                            }
+                            const next = {
+                              ...selected,
+                              text: combined,
+                            };
+                            await api.saveFile(next);
+                            setSelected(next);
+                            setText(next.text);
+                            await refresh();
+                          })
+                          .catch((e) => setError(String(e)))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      识别当前页
+                    </button>
+                  </>
+                ) : (
+                  <p>请在 Windows 配置支持视觉输入的模型。识别后的正文随资料索引同步到手机。</p>
+                )}
+              </details>
+              <label>
+                阅读页码
+                <input
+                  type="number"
+                  aria-label="阅读页码"
+                  min={1}
+                  value={page}
+                  onChange={(e) => {
+                    const n = Math.max(1, Number(e.target.value));
+                    setPage(n);
+                    localStorage.setItem(
+                      'fdu-reader-page:' + (selected.document_id ?? selected.hash),
+                      String(n),
+                    );
+                  }}
+                />
+              </label>
+              <label>
+                阅读缩放
+                <select
+                  aria-label="阅读缩放"
+                  value={zoom}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setZoom(value);
+                    localStorage.setItem(
+                      'fdu-reader-zoom:' + (selected.document_id ?? selected.hash),
+                      String(value),
+                    );
+                  }}
+                >
+                  {[50, 75, 100, 125, 150, 200].map((value) => (
+                    <option key={value} value={value}>
+                      {value}%
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <iframe title="PDF 阅读" src={url + '#page=' + page + '&zoom=' + zoom} />
+              <details>
+                <summary>检索正文与定位</summary>
+                <input
+                  aria-label="搜索文档正文"
+                  placeholder="输入关键词，查看对应页"
+                  onChange={(e) => {
+                    const query = e.target.value;
+                    if (query) {
+                      const position = selected.text.indexOf(query);
+                      const marks = [
+                        ...selected.text.slice(0, Math.max(0, position)).matchAll(/\[第(\d+)页\]/g),
+                      ];
+                      const mark = marks.at(-1);
+                      if (mark) setPage(Number(mark[1]));
+                    }
+                  }}
+                />
+                <pre>
+                  {selected.text.slice(
+                    Math.max(0, selected.text.indexOf('[第' + page + '页]')),
+                    Math.max(0, selected.text.indexOf('[第' + page + '页]')) + 5000,
+                  )}
+                </pre>
+              </details>
+            </>
           ) : selected.type === 'md' || selected.type === 'txt' ? (
             <>
               <textarea
@@ -261,11 +476,17 @@ export function Library({
               />
               <button
                 onClick={() =>
-                  void importFile(new File([text], selected.name)).then(() => setSelected(null))
+                  void importFile(new File([text], selected.name), selected).then((record) => {
+                    if (record) {
+                      localStorage.removeItem('fdu-note-draft:' + selected.hash);
+                      void open(record);
+                    }
+                  })
                 }
               >
                 保存为新版本
               </button>
+              <MarkdownText text={text} />
             </>
           ) : (
             <>
@@ -280,9 +501,13 @@ export function Library({
             资料关联课程
             <select
               aria-label="资料关联课程"
-              value={selected.course_ids[0] ?? ''}
+              multiple
+              value={selected.course_ids}
               onChange={(e) => {
-                const next = { ...selected, course_ids: e.target.value ? [e.target.value] : [] };
+                const next = {
+                  ...selected,
+                  course_ids: [...e.target.selectedOptions].map((o) => o.value).filter(Boolean),
+                };
                 void api
                   .saveFile(next)
                   .then(refresh)
@@ -298,13 +523,34 @@ export function Library({
               ))}
             </select>
           </label>
+          {models.length > 0 && (
+            <label>
+              问答模型
+              <select
+                aria-label="文档问答模型"
+                value={qaModel}
+                onChange={(e) => setQaModel(e.target.value)}
+              >
+                <option value="">默认启用模型</option>
+                {models.map((m, i) => (
+                  <option key={i} value={i}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               setBusy(true);
               setError('');
               void api
-                .askDocument(selected.hash, question)
+                .askDocument(
+                  selected.hash,
+                  question,
+                  qaModel === '' ? undefined : models[Number(qaModel)],
+                )
                 .then((r) => {
                   setAnswer(r.reply);
                   return refresh();
@@ -320,20 +566,116 @@ export function Library({
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 required
-                maxLength={4000}
+                maxLength={1500}
               />
             </label>
             <small>
-              编辑后请先保存新版本并重新打开。仅发送当前文件的已提取正文；可能截断，扫描PDF需先做OCR。不会自动发送其他资料。
+              仅检索当前文件已提取的正文；PDF 最多前 100 页、Office 最多前 200 页、正文最多 60,000
+              字。超出部分请拆分导入；扫描页需先识别。引用页码可点击定位。编辑后请先保存新版本。
             </small>
             <button disabled={busy || !selected.text || text !== selected.text}>
               根据本文回答
             </button>
           </form>
-          <p className="assignment-description">{answer}</p>
+          <MarkdownText text={answer} />
+          <div className="view-tabs">
+            {[...answer.matchAll(/第\s*(\d+)\s*页/g)].map((match, index) => (
+              <button key={index} onClick={() => setPage(Number(match[1]))}>
+                跳到第 {match[1]} 页
+              </button>
+            ))}
+          </div>
+          <details>
+            <summary>文件管理与版本</summary>
+            <button
+              disabled={!selected.uploaded}
+              onClick={() => {
+                if (confirm('删除该文件的云端原文件？本机副本保留，其他设备将无法下载。'))
+                  void api
+                    .deleteCloudFile(selected.hash)
+                    .then(refresh)
+                    .then(() => setSelected({ ...selected, uploaded: false }))
+                    .catch((e) => setError(String(e)));
+              }}
+            >
+              删除云端原文件
+            </button>
+            <label>
+              文件名称
+              <input
+                aria-label="文件名称"
+                defaultValue={selected.name}
+                onBlur={(e) => {
+                  const next = { ...selected, name: e.target.value };
+                  void api
+                    .saveFile(next)
+                    .then(refresh)
+                    .then(() => setSelected(next))
+                    .catch((e) => setError(String(e)));
+                }}
+              />
+            </label>
+            <button
+              onClick={() => {
+                if (confirm('只清除此设备下载？未上传的原文件请先备份。'))
+                  void blobs.delete(selected.hash).then(() => {
+                    setLocalHashes((keys) => keys.filter((h) => h !== selected.hash));
+                    setSelected(null);
+                  });
+              }}
+            >
+              清理本机下载
+            </button>
+            <button
+              onClick={() => {
+                const next = {
+                  ...selected,
+                  deleted_at: selected.deleted_at ? null : new Date().toISOString(),
+                };
+                void api
+                  .saveFile(next)
+                  .then(refresh)
+                  .then(() => setSelected(null));
+              }}
+            >
+              {selected.deleted_at ? '恢复资料' : '资料移到回收站'}
+            </button>
+            {snapshot.files
+              .filter((f) => f.document_id && f.document_id === selected.document_id)
+              .map((f) => (
+                <p key={f.hash}>
+                  <button onClick={() => void open(f)}>
+                    {new Date(f.created_at).toLocaleString('zh-CN')} · {f.hash.slice(0, 8)}
+                  </button>
+                  {f.hash !== selected.hash && (
+                    <button
+                      onClick={() =>
+                        void api
+                          .saveFile({ ...f, created_at: new Date().toISOString() })
+                          .then(refresh)
+                          .then(() => open(f))
+                      }
+                    >
+                      设为当前版本
+                    </button>
+                  )}
+                </p>
+              ))}
+          </details>
+          <button
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('fdu-ai-context', {
+                  detail: `请根据资料“${selected.name}”生成复习任务，先给我草稿。资料片段：${selected.text.slice(0, 4000)}`,
+                }),
+              )
+            }
+          >
+            生成复习任务
+          </button>
         </section>
       )}
-      {busy && <p role="status">正在处理资料…</p>}
+      {(busy || progress) && <p role="status">{progress || '正在处理资料…'}</p>}
       {error && (
         <p role="alert" className="error">
           {error}
@@ -361,7 +703,24 @@ export async function fullBackup(raw: string) {
       count++;
     }
   }
-  return { blob: await zip.generateAsync({ type: 'blob' }), count };
+  const missing = (data.state.files ?? []).length - count;
+  zip.file(
+    'files-manifest.json',
+    JSON.stringify(
+      (data.state.files ?? []).map((file: LibraryFile) => ({
+        hash: file.hash,
+        name: file.name,
+        included: !!zip.file(`files/${file.hash}`),
+      })),
+      null,
+      2,
+    ),
+  );
+  zip.file(
+    'manifest.txt',
+    `本机原文件 ${count} 份；未包含原文件 ${missing} 份。恢复仅追加任务副本、课程分类和资料索引，不恢复凭据、权限或 AI 操作。`,
+  );
+  return { blob: await zip.generateAsync({ type: 'blob' }), count, missing };
 }
 export async function readFullBackup(file: File) {
   if (file.size > 100 * 1024 * 1024) throw new Error('备份文件最多100MB');
@@ -394,5 +753,10 @@ export async function readFullBackup(file: File) {
     if (hash !== record.hash) throw new Error('备份文件校验失败');
     content.push({ hash, bytes });
   }
-  return { data, commit: () => blobs.bulkPut(content) };
+  return {
+    data,
+    count: content.length,
+    missing: records.length - content.length,
+    commit: () => blobs.bulkPut(content),
+  };
 }

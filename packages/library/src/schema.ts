@@ -14,6 +14,13 @@ export const fileSchema = z
     uploaded: z.boolean(),
     created_at: z.iso.datetime({ offset: true }),
     version: z.number().int().min(0),
+    document_id: z.uuid().optional(),
+    previous_hash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable()
+      .optional(),
+    deleted_at: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .strict();
 export type LibraryFile = z.infer<typeof fileSchema>;
