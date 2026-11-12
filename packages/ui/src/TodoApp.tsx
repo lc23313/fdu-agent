@@ -12,14 +12,8 @@ import { Courses } from './Courses.tsx';
 import { AiAssistant, DraftReview } from './AiAssistant.tsx';
 import { Reminders } from './Reminders.tsx';
 import type { DesktopLearningApi } from './LearningLogin.tsx';
-const views = [
-  ['today', '今天'],
-  ['inbox', '收集箱'],
-  ['upcoming', '计划'],
-  ['completed', '已完成'],
-  ['courses', '课程'],
-  ['ai', 'AI 助手'],
-] as const;
+import type { DesktopLectureApi } from './LecturePanel.tsx';
+import { LecturePanel } from './LecturePanel.tsx';
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function TodoApp({
   api,
@@ -27,13 +21,25 @@ export function TodoApp({
   library,
   modelSettings,
   desktopLearning,
+  desktopLecture,
+  desktopIcourse,
 }: {
   api: ClientApi;
   assistant?: ReactNode;
   library?: ReactNode;
   modelSettings?: ReactNode;
   desktopLearning?: DesktopLearningApi;
+  desktopLecture?: DesktopLectureApi;
+  desktopIcourse?: ReactNode;
 }) {
+  const views: [string, string][] = [
+    ['today', '今天'],
+    ['upcoming', '计划'],
+    ['courses', '课程'],
+    ...(desktopIcourse ? [['icourse', 'iCourse'] as [string, string]] : []),
+    ['lectures', '转写工具'],
+    ['ai', 'AI 助手'],
+  ];
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [error, setError] = useState(''),
     [view, setView] = useState('today'),
@@ -61,6 +67,8 @@ export function TodoApp({
     [bulk, setBulk] = useState(false),
     [folded, setFolded] = useState<string[]>([]),
     [trash, setTrash] = useState(false),
+    [inboxOpen, setInboxOpen] = useState(false),
+    [completedCount, setCompletedCount] = useState(100),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [noticeTick, setNoticeTick] = useState(0),
@@ -105,6 +113,7 @@ export function TodoApp({
     [api, refresh],
   );
   const navigate = (next: string) => {
+    setInboxOpen(false);
     setView(next);
     setVisited((v) => (v.includes(next) ? v : [...v, next]));
     setSelected(null);
@@ -312,19 +321,9 @@ export function TodoApp({
     `${t.title} ${t.notes} ${t.description} ${t.tags.join(' ')} ${indexes.courses.get(t.course_id ?? '')?.name ?? ''}`
       .toLowerCase()
       .includes(query.toLowerCase());
-  let list = (trash ? snapshot.deletedTasks : tasks).filter((t) =>
-    global || trash
-      ? true
-      : view === 'completed'
-        ? t.status === 'completed'
-        : t.status !== 'completed',
-  );
-  if (!global && !trash) {
+  let list = tasks.filter((t) => global || t.status !== 'completed');
+  if (!global) {
     if (view === 'today') list = list.filter(isToday);
-    if (view === 'inbox')
-      list = list.filter(
-        (t) => !scheduledAt(t) && (!t.parent_id || !indexes.tasks.has(t.parent_id)),
-      );
     if (view === 'upcoming')
       list = list.filter((t) =>
         day && (planMode === 'week' || planMode === 'month') ? occursOn(t, day) : inPlan(t),
@@ -340,7 +339,7 @@ export function TodoApp({
         ? a.title.localeCompare(b.title, 'zh')
         : sort === 'created'
           ? b.created_at.localeCompare(a.created_at)
-          : sort === 'completed' || view === 'completed'
+          : sort === 'completed'
             ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
             : (scheduledAt(a) ?? 'z').localeCompare(scheduledAt(b) ?? 'z'),
   );
@@ -350,6 +349,12 @@ export function TodoApp({
     (t) =>
       t.status === 'completed' && t.completed_at && dayKey(t.completed_at) === today && matches(t),
   );
+  const inboxTasks = incomplete.filter(
+    (t) => !scheduledAt(t) && (!t.parent_id || !indexes.tasks.has(t.parent_id)) && matches(t),
+  );
+  const completedTasks = tasks
+    .filter((t) => t.status === 'completed' && matches(t))
+    .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
   const counts: Record<string, number> = {
     today: incomplete.filter(isToday).length,
     inbox: incomplete.filter((t) => !scheduledAt(t) && !t.parent_id).length,
@@ -507,7 +512,7 @@ export function TodoApp({
                   <NavIcon name={id} />
                 </span>
                 <span>{label}</span>
-                {id !== 'ai' && <small>{counts[id]}</small>}
+                {counts[id] !== undefined && <small>{counts[id]}</small>}
               </button>
             </div>
           ))}
@@ -523,14 +528,15 @@ export function TodoApp({
       <nav className="mobile-nav" aria-label="手机导航">
         {[
           ['today', '今天'],
-          ['inbox', '任务'],
           ['upcoming', '计划'],
-          ['courses', '课程'],
           ['ai', 'AI'],
+          ['courses', '课程'],
+          ['lectures', '转写工具'],
         ].map(([id, label]) => (
           <button
             key={id}
-            className={view === id || (id === 'inbox' && view === 'completed') ? 'active' : ''}
+            className={view === id ? 'active' : ''}
+            aria-current={view === id ? 'page' : undefined}
             onClick={() => navigate(id!)}
           >
             <NavIcon name={id!} />
@@ -548,9 +554,20 @@ export function TodoApp({
             })}
           </div>
           <div className="page-title">
-            <h1>
-              {global ? '搜索结果' : trash ? '回收站' : views.find(([id]) => id === view)?.[1]}
-            </h1>
+            <h1>{global ? '搜索结果' : views.find(([id]) => id === view)?.[1]}</h1>
+            {view === 'upcoming' && !global && (
+              <button
+                className="plan-inbox-entry"
+                aria-label="收集箱"
+                aria-expanded={inboxOpen}
+                aria-controls="plan-inbox"
+                onClick={() => setInboxOpen(!inboxOpen)}
+              >
+                <NavIcon name="inbox" />
+                <span>收集箱</span>
+                <small aria-hidden="true">{counts.inbox}</small>
+              </button>
+            )}
             <button
               className="mobile-settings"
               aria-label="设置与同步"
@@ -662,6 +679,7 @@ export function TodoApp({
             />
           )}
         </div>
+        <div hidden={view !== 'icourse'}>{visited.includes('icourse') && desktopIcourse}</div>
         <div hidden={view !== 'ai'}>
           {visited.includes('ai') && (
             <section className="assistant-panel">
@@ -697,78 +715,94 @@ export function TodoApp({
             </section>
           )}
         </div>
-        {view !== 'courses' && view !== 'ai' && (
+        <div hidden={view !== 'lectures'}>
+          {visited.includes('lectures') && (
+            <LecturePanel api={api} snapshot={snapshot} desktop={desktopLecture} />
+          )}
+        </div>
+        {view !== 'courses' && view !== 'ai' && view !== 'lectures' && view !== 'icourse' && (
           <>
-            {(view === 'inbox' || view === 'completed') && (
-              <div className="view-tabs mobile-task-tabs">
-                <button onClick={() => navigate('inbox')}>收集箱</button>
-                <button onClick={() => navigate('completed')}>已完成</button>
-                <button onClick={() => setTrash(!trash)}>回收站</button>
-              </div>
-            )}
-            {!trash && view !== 'completed' && (
-              <form
-                className="quick-add"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
-                }}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (busy) return;
-                  setBusy(true);
-                  void create(title, {
-                    ...(filters.course ? { course_id: filters.course } : {}),
-                    ...(view === 'today' || view === 'upcoming'
-                      ? {
-                          start_at: new Date(`${plannedDay}T00:00`).toISOString(),
-                          time_kind: 'day' as const,
-                        }
-                      : {}),
+            <form
+              className="quick-add"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
+              }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (busy) return;
+                setBusy(true);
+                void create(title, {
+                  ...(filters.course ? { course_id: filters.course } : {}),
+                  ...(!inboxOpen && (view === 'today' || view === 'upcoming')
+                    ? {
+                        start_at: new Date(`${plannedDay}T00:00`).toISOString(),
+                        time_kind: 'day' as const,
+                      }
+                    : {}),
+                })
+                  .then(() => {
+                    setTitle('');
+                    document.getElementById('quick-task')?.focus();
                   })
-                    .then(() => {
-                      setTitle('');
-                      document.getElementById('quick-task')?.focus();
-                    })
-                    .catch(() => {})
-                    .finally(() => setBusy(false));
-                }}
+                  .catch(() => {})
+                  .finally(() => setBusy(false));
+              }}
+            >
+              <input
+                id="quick-task"
+                aria-label="新任务标题"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  inboxOpen
+                    ? '先记下来，稍后安排…'
+                    : view === 'upcoming'
+                      ? `添加到 ${plannedDay}…`
+                      : '今天要做什么？'
+                }
+                required
+                maxLength={200}
+              />
+              <button className="primary" disabled={busy} aria-label="添加">
+                <NavIcon name="plus" />
+                <span>添加</span>
+              </button>
+              <button
+                type="button"
+                className="quick-detail"
+                aria-label="详细添加"
+                title="详细添加"
+                onClick={() => setNewTask(true)}
               >
-                <input
-                  id="quick-task"
-                  aria-label="新任务标题"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={
-                    view === 'inbox'
-                      ? '先记下来，稍后安排…'
-                      : view === 'upcoming'
-                        ? `添加到 ${plannedDay}…`
-                        : '今天要做什么？'
-                  }
-                  required
-                  maxLength={200}
-                />
-                <button className="primary" disabled={busy} aria-label="添加">
-                  <NavIcon name="plus" />
-                  <span>添加</span>
-                </button>
-                <button
-                  type="button"
-                  className="quick-detail"
-                  aria-label="详细添加"
-                  title="详细添加"
-                  onClick={() => setNewTask(true)}
-                >
-                  <NavIcon name="more" />
-                  <span>详细添加</span>
-                </button>
-              </form>
+                <NavIcon name="more" />
+                <span>详细添加</span>
+              </button>
+            </form>
+            {view === 'upcoming' && inboxOpen && !global && (
+              <section id="plan-inbox" className="plan-inbox" aria-label="收集箱任务">
+                <div className="list-heading">
+                  <span>收集箱 · {inboxTasks.length} 项未安排</span>
+                  <button onClick={() => setInboxOpen(false)}>收起</button>
+                </div>
+                {inboxTasks.length ? (
+                  inboxTasks.map(row)
+                ) : (
+                  <p className="subtitle">暂时没有未安排的任务。可以在上方先记下来。</p>
+                )}
+              </section>
             )}
             {view === 'today' && !global && (
               <div className="today-progress">
                 今天已完成 {completedToday.length} 项 · {counts.today} 项待处理
                 {counts.inbox! > 0 && (
-                  <button onClick={() => navigate('inbox')}>整理 {counts.inbox} 项未安排</button>
+                  <button
+                    onClick={() => {
+                      navigate('upcoming');
+                      setInboxOpen(true);
+                    }}
+                  >
+                    整理 {counts.inbox} 项未安排
+                  </button>
                 )}
               </div>
             )}
@@ -823,7 +857,7 @@ export function TodoApp({
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
-                    setGlobal(!trash && !!e.target.value);
+                    setGlobal(!!e.target.value);
                   }}
                 />
                 <kbd aria-hidden="true">Ctrl K</kbd>
@@ -897,7 +931,7 @@ export function TodoApp({
                   <option value="">所有状态</option>
                   <option value="todo">待办</option>
                   <option value="in_progress">进行中</option>
-                  {(global || view === 'completed') && <option value="completed">已完成</option>}
+                  {global && <option value="completed">已完成</option>}
                 </select>
                 <select
                   aria-label="筛选标签"
@@ -1048,16 +1082,7 @@ export function TodoApp({
                     (index === 0 || !overdueTask(list[index - 1]!)) && (
                       <h3 className="date-group overdue">逾期未完成</h3>
                     )}
-                  {trash ? (
-                    <div className="task-row">
-                      <span>{t.title}</span>
-                      <button onClick={() => void run(() => api.restore(t.id)).catch(() => {})}>
-                        恢复任务
-                      </button>
-                    </div>
-                  ) : (
-                    row(t)
-                  )}
+                  {row(t)}
                 </div>
               ))}
               {!list.length && (
@@ -1065,11 +1090,9 @@ export function TodoApp({
                   <h2>
                     {query || filterCount
                       ? '没有匹配结果'
-                      : trash
-                        ? '回收站为空'
-                        : view === 'today'
-                          ? '今天的待办已处理'
-                          : '暂时没有任务'}
+                      : view === 'today'
+                        ? '今天的待办已处理'
+                        : '暂时没有任务'}
                   </h2>
                   <p>
                     {query || filterCount ? '可以清除筛选，查看其他任务。' : '想到什么就记下来。'}
@@ -1081,6 +1104,36 @@ export function TodoApp({
               <button onClick={() => setDisplayCount((n) => n + 100)}>
                 显示更多（还有 {list.length - displayCount} 项）
               </button>
+            )}
+            {view === 'upcoming' && !global && (
+              <details className="plan-completed">
+                <summary>已完成 · {completedTasks.length} 项</summary>
+                {completedTasks.slice(0, completedCount).map(row)}
+                {!completedTasks.length && <p className="subtitle">完成的任务会保留在这里。</p>}
+                {completedTasks.length > completedCount && (
+                  <button onClick={() => setCompletedCount((n) => n + 100)}>显示更多已完成</button>
+                )}
+                <button
+                  className="recycle-entry"
+                  aria-expanded={trash}
+                  onClick={() => setTrash(!trash)}
+                >
+                  回收站
+                </button>
+                {trash && (
+                  <section aria-label="回收站任务">
+                    {snapshot.deletedTasks.map((t) => (
+                      <div className="task-row" key={t.id}>
+                        <span>{t.title}</span>
+                        <button onClick={() => void run(() => api.restore(t.id)).catch(() => {})}>
+                          恢复任务
+                        </button>
+                      </div>
+                    ))}
+                    {!snapshot.deletedTasks.length && <p className="subtitle">回收站为空</p>}
+                  </section>
+                )}
+              </details>
             )}
             {view === 'today' && !global && completedToday.length > 0 && (
               <details className="today-completed">
@@ -1122,7 +1175,7 @@ export function TodoApp({
           templates={catalog.plans}
           saveTemplate={saveTemplate}
           title={title}
-          day={view === 'today' || view === 'upcoming' ? plannedDay : ''}
+          day={!inboxOpen && (view === 'today' || view === 'upcoming') ? plannedDay : ''}
           course={filters.course}
           save={save}
           create={create}

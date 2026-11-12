@@ -8,7 +8,18 @@ if (!/^\/(?:[a-zA-Z0-9._-]+\/)*$/.test(base))
   throw new Error('FDU_PWA_BASE 必须是 / 或 /仓库名/ 形式的站内路径');
 await build(config);
 const assets = (await readdir('apps/pwa/dist/assets')).sort().map((f) => 'assets/' + f);
-const files = ['index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', ...assets];
+const lecture = (await readdir('apps/pwa/dist/lecture', { recursive: true, withFileTypes: true }))
+  .filter((file) => file.isFile())
+  .map((file) => (file.parentPath + '/' + file.name).replaceAll('\\', '/').split('/dist/')[1]!)
+  .sort();
+const files = [
+  'index.html',
+  'manifest.webmanifest',
+  'icon-192.png',
+  'icon-512.png',
+  ...assets,
+  ...lecture,
+];
 const coreFiles = files.filter(
   (file) =>
     !/^assets\/(?:pdf(?:\.worker)?[-.]|jszip\.min-)/.test(file) && !/\.(?:woff2?|ttf)$/.test(file),

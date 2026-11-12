@@ -61,12 +61,14 @@ export function Courses({
           资料库
         </button>
       </div>
-      <LearningConnection
-        api={api}
-        snapshot={snapshot}
-        refresh={refresh}
-        desktop={desktopLearning}
-      />
+      <div>
+        <LearningConnection
+          api={api}
+          snapshot={snapshot}
+          refresh={refresh}
+          desktop={desktopLearning}
+        />
+      </div>
       {section === 'library' ? (
         <>
           <p className="subtitle">跨课程资料统一查看，课程内的资料使用同一文件记录。</p>

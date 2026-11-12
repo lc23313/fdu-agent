@@ -6,6 +6,8 @@ export function NavIcon({ name }: { name: string }) {
     completed: 'm7 12 3 3 7-7M21 12a9 9 0 1 1-3-7',
     courses: 'M12 6v15M3 4c5-1 7 0 9 2 2-2 4-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2z',
     ai: 'm12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z',
+    icourse: 'M3 4h18v13H3zM8 21h8m-4-4v4M10 7l5 3-5 3z',
+    lectures: 'M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0zM5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8',
     plus: 'M12 5v14M5 12h14',
     search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
     settings:

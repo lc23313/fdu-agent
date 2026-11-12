@@ -663,6 +663,58 @@
 .fdu-app .file-row {
   padding: 16px 0;
 }
+.fdu-app .plan-inbox-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  margin-right: 14px;
+  padding: 7px 11px;
+  font-size: 12px;
+  color: var(--fdu-dim);
+  background: transparent;
+}
+.fdu-app .plan-inbox-entry svg {
+  width: 16px;
+  height: 16px;
+}
+.fdu-app .plan-inbox-entry[aria-expanded='true'] {
+  background: var(--fdu-wash);
+  color: var(--fdu-accent);
+  border-color: var(--fdu-accent);
+}
+.fdu-app .plan-inbox {
+  margin: 14px 0 24px;
+  padding: 0 12px 12px;
+  border: 1px solid var(--fdu-line);
+  border-radius: 12px;
+  background: var(--fdu-surface);
+}
+.fdu-app .plan-inbox .list-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--fdu-dim);
+  font-size: 11px;
+}
+.fdu-app .plan-completed {
+  margin-top: 32px;
+  padding-top: 18px;
+  border-top: 1px solid var(--fdu-line);
+}
+.fdu-app .plan-completed > summary {
+  color: var(--fdu-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.fdu-app .plan-completed .recycle-entry {
+  margin-top: 18px;
+  background: transparent;
+  color: var(--fdu-dim);
+  font-size: 11px;
+}
+.fdu-app .plan-completed .task-row > span {
+  flex: 1;
+}
 .fdu-app .file-row > button:first-child {
   font-size: 13px;
   font-weight: 500;
@@ -980,6 +1032,10 @@ html.dark .fdu-app .task-date.overdue {
     width: 44px;
     height: 44px;
   }
+  .fdu-app .plan-inbox-entry {
+    min-height: 44px;
+    margin-right: 8px;
+  }
   .fdu-app .mobile-settings svg {
     width: 20px;
     height: 20px;
@@ -1194,4 +1250,27 @@ html.dark .fdu-app .task-date.overdue {
   .fdu-app .ai-scope-note {
     font-size: 10px;
   }
+}
+.lecture-panel iframe {
+  width: 100%;
+  height: calc(100dvh - 230px);
+  min-height: 580px;
+  border: 1px solid var(--fdu-line);
+  border-radius: 12px;
+  background: white;
+}
+@media (max-width: 650px) {
+  .lecture-panel iframe {
+    height: calc(100dvh - 240px);
+    min-height: 540px;
+  }
+}
+.lecture-jobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cloud-lecture textarea {
+  width: 100%;
 }

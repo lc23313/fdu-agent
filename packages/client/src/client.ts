@@ -799,6 +799,24 @@ export class TaskClient {
       2,
     );
   }
+  async lecture(input: unknown): Promise<unknown> {
+    if (!this.cloud || !this.engine) throw new Error('请先在设置中用同步码连接云端空间');
+    const { data, error } = await this.cloud.functions.invoke('lecture', {
+      body: z.record(z.string(), z.unknown()).parse(input),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (error) {
+      const response = (error as { context?: Response }).context;
+      const body = response instanceof Response ? await response.json().catch(() => null) : null;
+      const parsed = z.object({ error: z.string() }).safeParse(body);
+      throw new Error(
+        parsed.success
+          ? parsed.data.error
+          : '讲座云服务未连接，请先安装 010 迁移并部署 lecture 函数',
+      );
+    }
+    return data;
+  }
   async logout() {
     if ((await this.store.read()).pending.length) throw new Error('请先同步或导出未同步任务');
     this.stopListen?.();
@@ -811,6 +829,7 @@ export type Snapshot = Awaited<ReturnType<TaskClient['snapshot']>>;
 export type ClientApi = Pick<
   TaskClient,
   | 'snapshot'
+  | 'lecture'
   | 'revision'
   | 'saveFile'
   | 'resolveFile'
