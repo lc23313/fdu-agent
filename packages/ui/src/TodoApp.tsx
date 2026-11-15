@@ -14,6 +14,7 @@ import { Reminders } from './Reminders.tsx';
 import type { DesktopLearningApi } from './LearningLogin.tsx';
 import type { DesktopLectureApi } from './LecturePanel.tsx';
 import { LecturePanel } from './LecturePanel.tsx';
+import { StudyApp } from './StudyApp.tsx';
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function TodoApp({
   api,
@@ -504,8 +505,10 @@ export function TodoApp({
               {id === 'courses' && <small className="nav-group">学习管理</small>}
               {id === 'ai' && <small className="nav-group">AI 助手</small>}
               <button
-                className={view === id ? 'active' : ''}
-                aria-current={view === id ? 'page' : undefined}
+                className={view === id || (view === 'study' && id === 'upcoming') ? 'active' : ''}
+                aria-current={
+                  view === id || (view === 'study' && id === 'upcoming') ? 'page' : undefined
+                }
                 onClick={() => navigate(id)}
               >
                 <span className="nav-icon">
@@ -535,8 +538,10 @@ export function TodoApp({
         ].map(([id, label]) => (
           <button
             key={id}
-            className={view === id ? 'active' : ''}
-            aria-current={view === id ? 'page' : undefined}
+            className={view === id || (view === 'study' && id === 'upcoming') ? 'active' : ''}
+            aria-current={
+              view === id || (view === 'study' && id === 'upcoming') ? 'page' : undefined
+            }
             onClick={() => navigate(id!)}
           >
             <NavIcon name={id!} />
@@ -554,7 +559,13 @@ export function TodoApp({
             })}
           </div>
           <div className="page-title">
-            <h1>{global ? '搜索结果' : views.find(([id]) => id === view)?.[1]}</h1>
+            <h1>
+              {global
+                ? '搜索结果'
+                : view === 'study'
+                  ? '学习打卡'
+                  : views.find(([id]) => id === view)?.[1]}
+            </h1>
             {view === 'upcoming' && !global && (
               <button
                 className="plan-inbox-entry"
@@ -649,6 +660,23 @@ export function TodoApp({
             </button>
           </div>
         )}
+        {view === 'study' && (
+          <StudyApp
+            api={api}
+            snapshot={snapshot}
+            reload={refresh}
+            back={() => navigate('upcoming')}
+          />
+        )}
+        {view === 'upcoming' && !global && (
+          <button className="study-entry" onClick={() => navigate('study')}>
+            <span>
+              <strong>学习打卡</strong>
+              <small>预设安排、临时学习与实际学习记录</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
         <div hidden={view !== 'courses'}>
           {visited.includes('courses') && (
             <Courses
@@ -720,452 +748,459 @@ export function TodoApp({
             <LecturePanel api={api} snapshot={snapshot} desktop={desktopLecture} />
           )}
         </div>
-        {view !== 'courses' && view !== 'ai' && view !== 'lectures' && view !== 'icourse' && (
-          <>
-            <form
-              className="quick-add"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
-              }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (busy) return;
-                setBusy(true);
-                void create(title, {
-                  ...(filters.course ? { course_id: filters.course } : {}),
-                  ...(!inboxOpen && (view === 'today' || view === 'upcoming')
-                    ? {
-                        start_at: new Date(`${plannedDay}T00:00`).toISOString(),
-                        time_kind: 'day' as const,
-                      }
-                    : {}),
-                })
-                  .then(() => {
-                    setTitle('');
-                    document.getElementById('quick-task')?.focus();
+        {view !== 'study' &&
+          view !== 'courses' &&
+          view !== 'ai' &&
+          view !== 'lectures' &&
+          view !== 'icourse' && (
+            <>
+              <form
+                className="quick-add"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
+                }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (busy) return;
+                  setBusy(true);
+                  void create(title, {
+                    ...(filters.course ? { course_id: filters.course } : {}),
+                    ...(!inboxOpen && (view === 'today' || view === 'upcoming')
+                      ? {
+                          start_at: new Date(`${plannedDay}T00:00`).toISOString(),
+                          time_kind: 'day' as const,
+                        }
+                      : {}),
                   })
-                  .catch(() => {})
-                  .finally(() => setBusy(false));
-              }}
-            >
-              <input
-                id="quick-task"
-                aria-label="新任务标题"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={
-                  inboxOpen
-                    ? '先记下来，稍后安排…'
-                    : view === 'upcoming'
-                      ? `添加到 ${plannedDay}…`
-                      : '今天要做什么？'
-                }
-                required
-                maxLength={200}
-              />
-              <button className="primary" disabled={busy} aria-label="添加">
-                <NavIcon name="plus" />
-                <span>添加</span>
-              </button>
-              <button
-                type="button"
-                className="quick-detail"
-                aria-label="详细添加"
-                title="详细添加"
-                onClick={() => setNewTask(true)}
+                    .then(() => {
+                      setTitle('');
+                      document.getElementById('quick-task')?.focus();
+                    })
+                    .catch(() => {})
+                    .finally(() => setBusy(false));
+                }}
               >
-                <NavIcon name="more" />
-                <span>详细添加</span>
-              </button>
-            </form>
-            {view === 'upcoming' && inboxOpen && !global && (
-              <section id="plan-inbox" className="plan-inbox" aria-label="收集箱任务">
-                <div className="list-heading">
-                  <span>收集箱 · {inboxTasks.length} 项未安排</span>
-                  <button onClick={() => setInboxOpen(false)}>收起</button>
+                <input
+                  id="quick-task"
+                  aria-label="新任务标题"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={
+                    inboxOpen
+                      ? '先记下来，稍后安排…'
+                      : view === 'upcoming'
+                        ? `添加到 ${plannedDay}…`
+                        : '今天要做什么？'
+                  }
+                  required
+                  maxLength={200}
+                />
+                <button className="primary" disabled={busy} aria-label="添加">
+                  <NavIcon name="plus" />
+                  <span>添加</span>
+                </button>
+                <button
+                  type="button"
+                  className="quick-detail"
+                  aria-label="详细添加"
+                  title="详细添加"
+                  onClick={() => setNewTask(true)}
+                >
+                  <NavIcon name="more" />
+                  <span>详细添加</span>
+                </button>
+              </form>
+              {view === 'upcoming' && inboxOpen && !global && (
+                <section id="plan-inbox" className="plan-inbox" aria-label="收集箱任务">
+                  <div className="list-heading">
+                    <span>收集箱 · {inboxTasks.length} 项未安排</span>
+                    <button onClick={() => setInboxOpen(false)}>收起</button>
+                  </div>
+                  {inboxTasks.length ? (
+                    inboxTasks.map(row)
+                  ) : (
+                    <p className="subtitle">暂时没有未安排的任务。可以在上方先记下来。</p>
+                  )}
+                </section>
+              )}
+              {view === 'today' && !global && (
+                <div className="today-progress">
+                  今天已完成 {completedToday.length} 项 · {counts.today} 项待处理
+                  {counts.inbox! > 0 && (
+                    <button
+                      onClick={() => {
+                        navigate('upcoming');
+                        setInboxOpen(true);
+                      }}
+                    >
+                      整理 {counts.inbox} 项未安排
+                    </button>
+                  )}
                 </div>
-                {inboxTasks.length ? (
-                  inboxTasks.map(row)
-                ) : (
-                  <p className="subtitle">暂时没有未安排的任务。可以在上方先记下来。</p>
-                )}
-              </section>
-            )}
-            {view === 'today' && !global && (
-              <div className="today-progress">
-                今天已完成 {completedToday.length} 项 · {counts.today} 项待处理
-                {counts.inbox! > 0 && (
+              )}
+              {view === 'upcoming' && !global && (
+                <>
+                  <div className="view-tabs" aria-label="计划视图">
+                    {[
+                      ['list', '列表'],
+                      ['week', '周历'],
+                      ['month', '月历'],
+                    ].map(([id, label]) => (
+                      <button
+                        key={id}
+                        className={planMode === id ? 'selected' : ''}
+                        onClick={() => {
+                          setPlanMode(id!);
+                          setDay('');
+                          localStorage.setItem('fdu-plan-view', id!);
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {(planMode === 'week' || planMode === 'month') && (
+                    <PlanCalendar
+                      mode={planMode}
+                      anchor={anchor}
+                      day={day}
+                      tasks={incomplete.filter(matches)}
+                      select={setDay}
+                      move={(at) => {
+                        setAnchor(at);
+                        setDay('');
+                      }}
+                      open={setSelected}
+                      drop={(id, at) => {
+                        const t = indexes.tasks.get(id);
+                        if (t) void save(id, moveTaskToDay(t, at)).catch(() => {});
+                      }}
+                    />
+                  )}
+                </>
+              )}
+              <div className="task-toolbar">
+                <label className="task-search">
+                  <NavIcon name="search" />
+                  <input
+                    id="fdu-search"
+                    aria-label="搜索任务"
+                    placeholder="搜索任务、备注、课程"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setGlobal(!!e.target.value);
+                    }}
+                  />
+                  <kbd aria-hidden="true">Ctrl K</kbd>
+                </label>
+                <button aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
+                  <NavIcon name="filter" />
+                  筛选{filterCount ? ` · ${filterCount}` : ''}
+                </button>
+                <button
+                  aria-pressed={bulk}
+                  onClick={() => {
+                    setBulk(!bulk);
+                    setChosen([]);
+                  }}
+                >
+                  <NavIcon name="select" />
+                  多选
+                </button>
+                {(query || filterCount > 0) && (
                   <button
                     onClick={() => {
-                      navigate('upcoming');
-                      setInboxOpen(true);
+                      setQuery('');
+                      setGlobal(false);
+                      setFilters({ course: '', priority: '', source: '', status: '', tag: '' });
                     }}
                   >
-                    整理 {counts.inbox} 项未安排
+                    清除筛选
                   </button>
                 )}
               </div>
-            )}
-            {view === 'upcoming' && !global && (
-              <>
-                <div className="view-tabs" aria-label="计划视图">
-                  {[
-                    ['list', '列表'],
-                    ['week', '周历'],
-                    ['month', '月历'],
-                  ].map(([id, label]) => (
-                    <button
-                      key={id}
-                      className={planMode === id ? 'selected' : ''}
-                      onClick={() => {
-                        setPlanMode(id!);
-                        setDay('');
-                        localStorage.setItem('fdu-plan-view', id!);
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {(planMode === 'week' || planMode === 'month') && (
-                  <PlanCalendar
-                    mode={planMode}
-                    anchor={anchor}
-                    day={day}
-                    tasks={incomplete.filter(matches)}
-                    select={setDay}
-                    move={(at) => {
-                      setAnchor(at);
-                      setDay('');
-                    }}
-                    open={setSelected}
-                    drop={(id, at) => {
-                      const t = indexes.tasks.get(id);
-                      if (t) void save(id, moveTaskToDay(t, at)).catch(() => {});
-                    }}
-                  />
-                )}
-              </>
-            )}
-            <div className="task-toolbar">
-              <label className="task-search">
-                <NavIcon name="search" />
-                <input
-                  id="fdu-search"
-                  aria-label="搜索任务"
-                  placeholder="搜索任务、备注、课程"
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setGlobal(!!e.target.value);
-                  }}
-                />
-                <kbd aria-hidden="true">Ctrl K</kbd>
-              </label>
-              <button aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
-                <NavIcon name="filter" />
-                筛选{filterCount ? ` · ${filterCount}` : ''}
-              </button>
-              <button
-                aria-pressed={bulk}
-                onClick={() => {
-                  setBulk(!bulk);
-                  setChosen([]);
-                }}
-              >
-                <NavIcon name="select" />
-                多选
-              </button>
-              {(query || filterCount > 0) && (
-                <button
-                  onClick={() => {
-                    setQuery('');
-                    setGlobal(false);
-                    setFilters({ course: '', priority: '', source: '', status: '', tag: '' });
-                  }}
-                >
-                  清除筛选
-                </button>
-              )}
-            </div>
-            {filtersOpen && (
-              <div className="filters">
-                <select
-                  aria-label="筛选课程"
-                  value={filters.course}
-                  onChange={(e) => setFilter('course', e.target.value)}
-                >
-                  <option value="">所有课程</option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="筛选优先级"
-                  value={filters.priority}
-                  onChange={(e) => setFilter('priority', e.target.value)}
-                >
-                  <option value="">所有优先级</option>
-                  {['无', '低', '中', '高'].map((label, i) => (
-                    <option key={i} value={i}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label="筛选来源"
-                  value={filters.source}
-                  onChange={(e) => setFilter('source', e.target.value)}
-                >
-                  <option value="">全部来源</option>
-                  <option value="personal">个人与 AI</option>
-                  <option value="canvas">eLearning</option>
-                </select>
-                <select
-                  aria-label="筛选状态"
-                  value={filters.status}
-                  onChange={(e) => setFilter('status', e.target.value)}
-                >
-                  <option value="">所有状态</option>
-                  <option value="todo">待办</option>
-                  <option value="in_progress">进行中</option>
-                  {global && <option value="completed">已完成</option>}
-                </select>
-                <select
-                  aria-label="筛选标签"
-                  value={filters.tag}
-                  onChange={(e) => setFilter('tag', e.target.value)}
-                >
-                  <option value="">所有标签</option>
-                  {[...new Set(tasks.flatMap((t) => t.tags))].map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="list-heading">
-              <span>
-                {global ? '全部任务（含已完成）' : day || '任务清单'} · {list.length} 项
-              </span>
-              <select aria-label="排序" value={sort} onChange={(e) => setSort(e.target.value)}>
-                {[
-                  ['due', '安排时间'],
-                  ['priority', '优先级'],
-                  ['title', '标题'],
-                  ['created', '创建时间'],
-                  ['completed', '完成时间'],
-                ].map(([v, label]) => (
-                  <option key={v} value={v}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {bulk && (
-              <section className="bulk-actions">
-                <b>已选 {chosen.length} 项</b>
-                <button onClick={() => setChosen(list.map((t) => t.id))}>全选当前结果</button>
-                <button
-                  disabled={!chosen.length}
-                  onClick={() =>
-                    void run(async () => {
-                      for (const id of chosen) await api.change(id, { status: 'completed' });
-                      setChosen([]);
-                    }).catch(() => {})
-                  }
-                >
-                  完成所选
-                </button>
-                <label>
-                  安排日期
-                  <input
-                    type="date"
-                    aria-label="批量安排日期"
-                    disabled={!chosen.length}
-                    onChange={(e) => {
-                      const at = e.target.value;
-                      if (at)
-                        void run(async () => {
-                          for (const id of chosen) {
-                            const t = indexes.tasks.get(id);
-                            if (t) await api.change(id, moveTaskToDay(t, at));
-                          }
-                          setChosen([]);
-                        }).catch(() => {});
-                    }}
-                  />
-                </label>
-                <label>
-                  优先级
+              {filtersOpen && (
+                <div className="filters">
                   <select
-                    aria-label="批量优先级"
-                    disabled={!chosen.length}
-                    defaultValue=""
-                    onChange={(e) => {
-                      const priority = Number(e.target.value);
-                      void run(async () => {
-                        for (const id of chosen) await api.change(id, { priority });
-                      }).catch(() => {});
-                    }}
+                    aria-label="筛选课程"
+                    value={filters.course}
+                    onChange={(e) => setFilter('course', e.target.value)}
                   >
-                    <option value="" disabled>
-                      选择优先级
-                    </option>
-                    {['无', '低', '中', '高'].map((v, i) => (
-                      <option value={i} key={i}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  课程
-                  <select
-                    aria-label="批量课程"
-                    disabled={!chosen.length}
-                    defaultValue=""
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      void run(async () => {
-                        for (const id of chosen) await api.change(id, { course_id: value || null });
-                      }).catch(() => {});
-                    }}
-                  >
-                    <option value="">个人任务</option>
+                    <option value="">所有课程</option>
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
-                </label>
-                <details>
-                  <summary>更多操作</summary>
-                  <button
-                    className="danger"
-                    disabled={!chosen.length}
-                    onClick={() => {
-                      if (confirm(`将选中的 ${chosen.length} 项移到回收站？`))
-                        void run(async () => {
-                          for (const id of chosen) await api.remove(id);
-                          setChosen([]);
-                        }).catch(() => {});
-                    }}
+                  <select
+                    aria-label="筛选优先级"
+                    value={filters.priority}
+                    onChange={(e) => setFilter('priority', e.target.value)}
                   >
-                    删除所选
+                    <option value="">所有优先级</option>
+                    {['无', '低', '中', '高'].map((label, i) => (
+                      <option key={i} value={i}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label="筛选来源"
+                    value={filters.source}
+                    onChange={(e) => setFilter('source', e.target.value)}
+                  >
+                    <option value="">全部来源</option>
+                    <option value="personal">个人与 AI</option>
+                    <option value="canvas">eLearning</option>
+                  </select>
+                  <select
+                    aria-label="筛选状态"
+                    value={filters.status}
+                    onChange={(e) => setFilter('status', e.target.value)}
+                  >
+                    <option value="">所有状态</option>
+                    <option value="todo">待办</option>
+                    <option value="in_progress">进行中</option>
+                    {global && <option value="completed">已完成</option>}
+                  </select>
+                  <select
+                    aria-label="筛选标签"
+                    value={filters.tag}
+                    onChange={(e) => setFilter('tag', e.target.value)}
+                  >
+                    <option value="">所有标签</option>
+                    {[...new Set(tasks.flatMap((t) => t.tags))].map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="list-heading">
+                <span>
+                  {global ? '全部任务（含已完成）' : day || '任务清单'} · {list.length} 项
+                </span>
+                <select aria-label="排序" value={sort} onChange={(e) => setSort(e.target.value)}>
+                  {[
+                    ['due', '安排时间'],
+                    ['priority', '优先级'],
+                    ['title', '标题'],
+                    ['created', '创建时间'],
+                    ['completed', '完成时间'],
+                  ].map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {bulk && (
+                <section className="bulk-actions">
+                  <b>已选 {chosen.length} 项</b>
+                  <button onClick={() => setChosen(list.map((t) => t.id))}>全选当前结果</button>
+                  <button
+                    disabled={!chosen.length}
+                    onClick={() =>
+                      void run(async () => {
+                        for (const id of chosen) await api.change(id, { status: 'completed' });
+                        setChosen([]);
+                      }).catch(() => {})
+                    }
+                  >
+                    完成所选
                   </button>
-                </details>
+                  <label>
+                    安排日期
+                    <input
+                      type="date"
+                      aria-label="批量安排日期"
+                      disabled={!chosen.length}
+                      onChange={(e) => {
+                        const at = e.target.value;
+                        if (at)
+                          void run(async () => {
+                            for (const id of chosen) {
+                              const t = indexes.tasks.get(id);
+                              if (t) await api.change(id, moveTaskToDay(t, at));
+                            }
+                            setChosen([]);
+                          }).catch(() => {});
+                      }}
+                    />
+                  </label>
+                  <label>
+                    优先级
+                    <select
+                      aria-label="批量优先级"
+                      disabled={!chosen.length}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const priority = Number(e.target.value);
+                        void run(async () => {
+                          for (const id of chosen) await api.change(id, { priority });
+                        }).catch(() => {});
+                      }}
+                    >
+                      <option value="" disabled>
+                        选择优先级
+                      </option>
+                      {['无', '低', '中', '高'].map((v, i) => (
+                        <option value={i} key={i}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    课程
+                    <select
+                      aria-label="批量课程"
+                      disabled={!chosen.length}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        void run(async () => {
+                          for (const id of chosen)
+                            await api.change(id, { course_id: value || null });
+                        }).catch(() => {});
+                      }}
+                    >
+                      <option value="">个人任务</option>
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <details>
+                    <summary>更多操作</summary>
+                    <button
+                      className="danger"
+                      disabled={!chosen.length}
+                      onClick={() => {
+                        if (confirm(`将选中的 ${chosen.length} 项移到回收站？`))
+                          void run(async () => {
+                            for (const id of chosen) await api.remove(id);
+                            setChosen([]);
+                          }).catch(() => {});
+                      }}
+                    >
+                      删除所选
+                    </button>
+                  </details>
+                </section>
+              )}
+              <section className="task-list">
+                {list.slice(0, displayCount).map((t, index) => (
+                  <div className="task-group" key={t.id}>
+                    {!global &&
+                      view === 'upcoming' &&
+                      planMode === 'list' &&
+                      sort === 'due' &&
+                      (index === 0 ||
+                        dayKey(scheduledAt(t)!) !== dayKey(scheduledAt(list[index - 1]!)!)) && (
+                        <h3 className="date-group">
+                          {dayKey(scheduledAt(t)!) < today
+                            ? '正在进行/此前安排'
+                            : dayKey(scheduledAt(t)!) === today
+                              ? '今天'
+                              : dayKey(scheduledAt(t)!)}{' '}
+                        </h3>
+                      )}
+                    {!global &&
+                      view === 'today' &&
+                      overdueTask(t) &&
+                      (index === 0 || !overdueTask(list[index - 1]!)) && (
+                        <h3 className="date-group overdue">逾期未完成</h3>
+                      )}
+                    {row(t)}
+                  </div>
+                ))}
+                {!list.length && (
+                  <div className="empty-state">
+                    <h2>
+                      {query || filterCount
+                        ? '没有匹配结果'
+                        : view === 'today'
+                          ? '今天的待办已处理'
+                          : '暂时没有任务'}
+                    </h2>
+                    <p>
+                      {query || filterCount ? '可以清除筛选，查看其他任务。' : '想到什么就记下来。'}
+                    </p>
+                  </div>
+                )}
               </section>
-            )}
-            <section className="task-list">
-              {list.slice(0, displayCount).map((t, index) => (
-                <div className="task-group" key={t.id}>
-                  {!global &&
-                    view === 'upcoming' &&
-                    planMode === 'list' &&
-                    sort === 'due' &&
-                    (index === 0 ||
-                      dayKey(scheduledAt(t)!) !== dayKey(scheduledAt(list[index - 1]!)!)) && (
-                      <h3 className="date-group">
-                        {dayKey(scheduledAt(t)!) < today
-                          ? '正在进行/此前安排'
-                          : dayKey(scheduledAt(t)!) === today
-                            ? '今天'
-                            : dayKey(scheduledAt(t)!)}{' '}
-                      </h3>
-                    )}
-                  {!global &&
-                    view === 'today' &&
-                    overdueTask(t) &&
-                    (index === 0 || !overdueTask(list[index - 1]!)) && (
-                      <h3 className="date-group overdue">逾期未完成</h3>
-                    )}
-                  {row(t)}
-                </div>
-              ))}
-              {!list.length && (
-                <div className="empty-state">
-                  <h2>
-                    {query || filterCount
-                      ? '没有匹配结果'
-                      : view === 'today'
-                        ? '今天的待办已处理'
-                        : '暂时没有任务'}
-                  </h2>
-                  <p>
-                    {query || filterCount ? '可以清除筛选，查看其他任务。' : '想到什么就记下来。'}
-                  </p>
-                </div>
-              )}
-            </section>
-            {list.length > displayCount && (
-              <button onClick={() => setDisplayCount((n) => n + 100)}>
-                显示更多（还有 {list.length - displayCount} 项）
-              </button>
-            )}
-            {view === 'upcoming' && !global && (
-              <details className="plan-completed">
-                <summary>已完成 · {completedTasks.length} 项</summary>
-                {completedTasks.slice(0, completedCount).map(row)}
-                {!completedTasks.length && <p className="subtitle">完成的任务会保留在这里。</p>}
-                {completedTasks.length > completedCount && (
-                  <button onClick={() => setCompletedCount((n) => n + 100)}>显示更多已完成</button>
-                )}
-                <button
-                  className="recycle-entry"
-                  aria-expanded={trash}
-                  onClick={() => setTrash(!trash)}
-                >
-                  回收站
+              {list.length > displayCount && (
+                <button onClick={() => setDisplayCount((n) => n + 100)}>
+                  显示更多（还有 {list.length - displayCount} 项）
                 </button>
-                {trash && (
-                  <section aria-label="回收站任务">
-                    {snapshot.deletedTasks.map((t) => (
-                      <div className="task-row" key={t.id}>
-                        <span>{t.title}</span>
-                        <button onClick={() => void run(() => api.restore(t.id)).catch(() => {})}>
-                          恢复任务
-                        </button>
-                      </div>
-                    ))}
-                    {!snapshot.deletedTasks.length && <p className="subtitle">回收站为空</p>}
-                  </section>
-                )}
-              </details>
-            )}
-            {view === 'today' && !global && completedToday.length > 0 && (
-              <details className="today-completed">
-                <summary>今天已完成 · {completedToday.length} 项</summary>
-                {completedToday.map(row)}
-              </details>
-            )}
-            {view === 'today' &&
-              snapshot.learning.assignments.some(
-                (a) =>
-                  a.submission_state === 'unsubmitted' &&
-                  indexes.tasks.get(a.task_id)?.status === 'completed',
-              ) && (
-                <details className="notice">
-                  <summary>已完成但尚未提交的作业</summary>
-                  {snapshot.learning.assignments
-                    .filter(
-                      (a) =>
-                        a.submission_state === 'unsubmitted' &&
-                        indexes.tasks.get(a.task_id)?.status === 'completed',
-                    )
-                    .map((a) => (
-                      <p key={a.id}>
-                        <a href={a.official_url} target="_blank" rel="noreferrer">
-                          {a.original_title} · 去 eLearning 提交 ↗
-                        </a>
-                      </p>
-                    ))}
+              )}
+              {view === 'upcoming' && !global && (
+                <details className="plan-completed">
+                  <summary>已完成 · {completedTasks.length} 项</summary>
+                  {completedTasks.slice(0, completedCount).map(row)}
+                  {!completedTasks.length && <p className="subtitle">完成的任务会保留在这里。</p>}
+                  {completedTasks.length > completedCount && (
+                    <button onClick={() => setCompletedCount((n) => n + 100)}>
+                      显示更多已完成
+                    </button>
+                  )}
+                  <button
+                    className="recycle-entry"
+                    aria-expanded={trash}
+                    onClick={() => setTrash(!trash)}
+                  >
+                    回收站
+                  </button>
+                  {trash && (
+                    <section aria-label="回收站任务">
+                      {snapshot.deletedTasks.map((t) => (
+                        <div className="task-row" key={t.id}>
+                          <span>{t.title}</span>
+                          <button onClick={() => void run(() => api.restore(t.id)).catch(() => {})}>
+                            恢复任务
+                          </button>
+                        </div>
+                      ))}
+                      {!snapshot.deletedTasks.length && <p className="subtitle">回收站为空</p>}
+                    </section>
+                  )}
                 </details>
               )}
-          </>
-        )}
+              {view === 'today' && !global && completedToday.length > 0 && (
+                <details className="today-completed">
+                  <summary>今天已完成 · {completedToday.length} 项</summary>
+                  {completedToday.map(row)}
+                </details>
+              )}
+              {view === 'today' &&
+                snapshot.learning.assignments.some(
+                  (a) =>
+                    a.submission_state === 'unsubmitted' &&
+                    indexes.tasks.get(a.task_id)?.status === 'completed',
+                ) && (
+                  <details className="notice">
+                    <summary>已完成但尚未提交的作业</summary>
+                    {snapshot.learning.assignments
+                      .filter(
+                        (a) =>
+                          a.submission_state === 'unsubmitted' &&
+                          indexes.tasks.get(a.task_id)?.status === 'completed',
+                      )
+                      .map((a) => (
+                        <p key={a.id}>
+                          <a href={a.official_url} target="_blank" rel="noreferrer">
+                            {a.original_title} · 去 eLearning 提交 ↗
+                          </a>
+                        </p>
+                      ))}
+                  </details>
+                )}
+            </>
+          )}
       </main>
       {newTask && (
         <TaskEditor

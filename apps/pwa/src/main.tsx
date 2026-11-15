@@ -4,6 +4,7 @@ import { IndexedDbStore } from '../../../packages/storage/src/indexeddb.ts';
 import { TodoApp } from '../../../packages/ui/src/TodoApp.tsx';
 import '../../../packages/ui/src/style.css';
 import '../../../packages/ui/src/refinement.css';
+import '../../../packages/ui/src/controls.css';
 let id = localStorage.getItem('fdu-local-id');
 if (!id) {
   id = crypto.randomUUID();

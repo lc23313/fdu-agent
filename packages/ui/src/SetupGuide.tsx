@@ -10,6 +10,7 @@ import aiSql from '../../../supabase/migrations/202610310004_ai_quota.sql?raw';
 import experienceSql from '../../../supabase/migrations/202611060007_experience.sql?raw';
 import pushSql from '../../../supabase/migrations/202611060008_push.sql?raw';
 import cleanupSql from '../../../supabase/migrations/202611060009_file_cleanup.sql?raw';
+import studySql from '../../../supabase/migrations/202611130011_study.sql?raw';
 export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
   const [script, setScript] = useState('001'),
     [message, setMessage] = useState('');
@@ -24,6 +25,7 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
       '007': experienceSql,
       '008': pushSql,
       '009': cleanupSql,
+      '011': studySql,
       Storage: storageSql,
     } as Record<string, string>
   )[script]!;
@@ -62,6 +64,7 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
                 ['007', '时间、重复与资料版本'],
                 ['008', '个人设备推送（按需）'],
                 ['009', '本人私有文件清理（按需）'],
+                ['011', '学习打卡与会话同步'],
                 ['Storage', '私有文件存储（按需）'],
               ].map(([id, label]) => (
                 <option value={id} key={id}>
@@ -88,6 +91,14 @@ export function SetupGuide({ snapshot }: { snapshot: Snapshot }) {
           <p>
             在 SQL Editor 按顺序执行项目提供的 001、002、003、005
             迁移；已执行的不再重复执行。当前应用不会自动修改生产数据库。
+          </p>
+        </li>
+        <li>
+          <b>启用学习打卡同步</b>
+          <p>
+            如果 Plan 已经能同步，只需选择上方 011 脚本，在原项目 SQL Editor 执行一次。确认 Realtime
+            的 supabase_realtime publication 包含 fdu_study
+            表，两端沿用原同步码即可，无需新增函数或密钥。
           </p>
         </li>
         <li>

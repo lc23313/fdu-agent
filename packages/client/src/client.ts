@@ -18,6 +18,22 @@ import {
   type LearningDiagnostic,
 } from '../../elearning/src/schema.ts';
 import { learningFunctionError } from './elearning.ts';
+import { StudyReplica, studyResponseSchema } from '../../study/src/replica.ts';
+import { studyCommandSchema, type StudyCommand } from '../../study/src/commands.ts';
+import { scheduleFingerprint } from '../../study/src/import.ts';
+import {
+  activeSession,
+  applyChanges,
+  emptyStudy,
+  importPlan,
+  projectStudy,
+  studyStateSchema,
+  validateStudy,
+  transitionSession,
+  type StudyLocal,
+  type StudySession,
+  type Collection,
+} from '../../study/src/model.ts';
 
 export const catalogSchema = z.object({
   courses: z
@@ -83,6 +99,8 @@ export class TaskClient {
   error: string | null = null;
   syncing = false;
   private stopListen: (() => void) | null = null;
+  private stopStudyListen: (() => void) | null = null;
+  private studyReplica: StudyReplica | null = null;
   private active: Promise<void> | null = null;
   private bound: string | null = null;
   private learningActive: Promise<void> | null = null;
@@ -92,10 +110,18 @@ export class TaskClient {
   readonly makeStore: (id: string) => Store;
   readonly storage: SupportedStorage;
   readonly localId: string;
-  constructor(makeStore: (id: string) => Store, storage: SupportedStorage, localId: string) {
+  readonly isOnline: () => boolean;
+  constructor(
+    makeStore: (id: string) => Store,
+    storage: SupportedStorage,
+    localId: string,
+    isOnline = () =>
+      (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine !== false,
+  ) {
     this.makeStore = makeStore;
     this.storage = storage;
     this.localId = localId;
+    this.isOnline = isOnline;
     this.store = makeStore(localId);
     this.replica = new Replica(this.store);
   }
@@ -105,6 +131,7 @@ export class TaskClient {
     if (this.email) throw new Error('请先断开同步再修改配置');
     if (this.cloud) {
       this.stopListen?.();
+      this.stopStudyListen?.();
       this.cloud.auth.stopAutoRefresh();
       this.engine = null;
     }
@@ -184,6 +211,7 @@ export class TaskClient {
     if (
       !owner &&
       (previous.pending.length ||
+        (previous as StudyLocal).study?.pending.length ||
         (previous as LocalState & { files?: LibraryFile[] }).files?.length) &&
       !importLocal
     ) {
@@ -192,6 +220,8 @@ export class TaskClient {
     }
     if (this.bound !== id) {
       this.stopListen?.();
+      this.stopStudyListen?.();
+      this.studyReplica = null;
       this.store.close();
       this.store = this.makeStore(id);
       this.replica = new Replica(this.store);
@@ -206,6 +236,7 @@ export class TaskClient {
         Object.assign(state, {
           catalog: (previous as LocalState).catalog ?? catalogSchema.parse({}),
           catalogDirty: true,
+          study: (previous as StudyLocal).study ?? emptyStudy(),
           files: (previous as LocalState & { files?: LibraryFile[] }).files ?? [],
           filesDirty: ((previous as LocalState & { files?: LibraryFile[] }).files ?? []).map(
             (f) => f.hash,
@@ -214,6 +245,7 @@ export class TaskClient {
       });
       await this.makeStore(this.localId).update((state) => {
         state.pending = [];
+        delete (state as StudyLocal).study;
       });
     }
     await this.storage.setItem('fdu-owner', id);
@@ -229,6 +261,19 @@ export class TaskClient {
     this.stopListen = transport.listen(() => {
       void this.sync().catch(() => {});
     });
+    this.stopStudyListen?.();
+    const channel = this.cloud!.channel(`fdu-study-${id}-${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fdu_study', filter: `user_id=eq.${id}` },
+        () => {
+          void this.syncStudy();
+        },
+      )
+      .subscribe();
+    this.stopStudyListen = () => {
+      void this.cloud?.removeChannel(channel);
+    };
   }
   async snapshot() {
     const state = (await this.store.read()) as LocalState;
@@ -269,6 +314,7 @@ export class TaskClient {
       catalog: state.catalog ?? catalogSchema.parse({}),
       courses: [...(state.catalog?.courses ?? []), ...(state.learning?.courses ?? [])],
       learning: state.learning ?? emptyLearning(),
+      study: await this.getStudyReplica().snapshot(),
       learningError: this.learningError,
       learningSyncing: !!this.learningActive,
       catalogConflict: state.catalogConflict ?? null,
@@ -345,10 +391,186 @@ export class TaskClient {
   }
   sync(force = false): Promise<void> {
     if (this.active) return this.active;
-    this.active = this.performSync(force).finally(() => {
-      this.active = null;
-    });
+    this.active = Promise.all([this.performSync(force), this.syncStudy()])
+      .then(() => {})
+      .finally(() => {
+        this.active = null;
+      });
     return this.active;
+  }
+  private getStudyReplica() {
+    return (this.studyReplica ??= new StudyReplica(this.store));
+  }
+  private async syncStudy() {
+    if (!this.cloud || !this.engine || !this.isOnline()) return;
+    const cloud = this.cloud,
+      owner = (await this.store.read()).user_id;
+    await this.getStudyReplica().sync(async (operation) => {
+      const auth = await cloud.auth.getSession();
+      if (auth.error || auth.data.session?.user.id !== owner)
+        throw new Error('学习同步身份已失效，请重新连接');
+      const { data, error } = await cloud
+        .rpc('fdu_study_sync', { p_operation: operation })
+        .abortSignal(AbortSignal.timeout(12000));
+      if (error)
+        throw new Error(
+          error.code === 'PGRST202'
+            ? '学习数据已存本机；云端需安装 011 学习打卡迁移'
+            : error.message,
+        );
+      return studyResponseSchema.parse(data);
+    });
+  }
+  async study(input: StudyCommand) {
+    const c = studyCommandSchema.parse(input),
+      replica = this.getStudyReplica();
+    const { data } = await replica.snapshot();
+    if (c.type === 'task' || c.type === 'block' || c.type === 'record') {
+      await replica.commit([
+        {
+          collection: c.type === 'task' ? 'tasks' : c.type === 'block' ? 'blocks' : 'records',
+          id: c.value.id,
+          after: c.value,
+          before: c.before,
+        },
+      ]);
+    } else if (c.type === 'deleteBlock' || c.type === 'deleteRecord') {
+      await replica.commit([
+        {
+          collection: c.type === 'deleteBlock' ? 'blocks' : 'records',
+          id: c.id,
+          after: null,
+          before: c.before,
+        },
+      ]);
+    } else if (c.type === 'deleteTask') {
+      const linked = Object.values(data.blocks)
+        .filter((b) => b.task_id === c.id)
+        .map((b) => b.id)
+        .sort();
+      if (
+        JSON.stringify(linked) !== JSON.stringify([...c.block_ids].sort()) ||
+        JSON.stringify(data.tasks[c.id]) !== JSON.stringify(c.before)
+      )
+        throw new Error('关联安排已改变，请重新确认删除');
+      await replica.deleteTask(c.id);
+    } else if (c.type === 'importPlan') {
+      if (data.meta['plan-import']?.imported) throw new Error('已完成一次性导入');
+      const result = importPlan((await this.snapshot()).tasks, data);
+      await replica.commit(
+        (['tasks', 'blocks', 'meta'] as Collection[]).flatMap((collection) =>
+          Object.entries(result.data[collection])
+            .filter(([id]) => !data[collection][id])
+            .map(([id, after]) => ({ collection, id, after })),
+        ),
+      );
+    } else if (c.type === 'importSchedule') {
+      if (scheduleFingerprint(data) !== c.fingerprint)
+        throw new Error('预设安排已发生变化，请重新打开 Excel 导入预览');
+      const referenced = [...new Set(c.blocks.map((b) => b.task_id))].filter(
+        (id) => data.tasks[id],
+      );
+      await replica.commit([
+        ...referenced.map((id) => ({
+          collection: 'tasks' as const,
+          id,
+          before: data.tasks[id],
+          after: data.tasks[id]!,
+        })),
+        ...c.tasks.map((task) => ({
+          collection: 'tasks' as const,
+          id: task.id,
+          before: null,
+          after: task,
+        })),
+        ...c.blocks.map((block) => ({
+          collection: 'blocks' as const,
+          id: block.id,
+          before: null,
+          after: block,
+        })),
+      ]);
+    } else if (c.type === 'start') {
+      if (activeSession(data)) throw new Error('请先结束当前学习并确认保存总结');
+      const task = c.preset ? data.tasks[c.task.id] : c.task;
+      if (!task) throw new Error('预设任务已删除');
+      if ((task.mode === 'complete') !== (c.method === 'complete'))
+        throw new Error('任务打卡方式已变更，请重新选择');
+      const at = new Date().toISOString(),
+        id = crypto.randomUUID();
+      if (c.method === 'complete')
+        await replica.commit([
+          {
+            collection: 'records',
+            id,
+            after: {
+              id,
+              task,
+              date: new Date().toLocaleDateString('sv-SE'),
+              started_at: at,
+              ended_at: at,
+              seconds: 0,
+              method: 'complete',
+              rounds: 0,
+              early: false,
+            },
+          },
+        ]);
+      else {
+        const session: StudySession = {
+          id,
+          task,
+          method: c.method,
+          status: 'focus',
+          started_at: at,
+          ended_at: null,
+          focus_minutes: c.focus_minutes,
+          rest_minutes: c.rest_minutes,
+          round: 1,
+          rest_until: null,
+          intervals: [{ start: at, end: null, round: 1 }],
+        };
+        await replica.start(session);
+      }
+    } else if (c.type === 'transition') {
+      await replica.commit([
+        {
+          collection: 'sessions',
+          id: c.before.id,
+          before: c.before,
+          after: transitionSession(c.before, c.action),
+        },
+      ]);
+    } else if (c.type === 'save') {
+      if (
+        c.before.status !== 'summary' ||
+        c.record.id !== c.before.id ||
+        JSON.stringify(c.record.task) !== JSON.stringify(c.before.task) ||
+        c.record.method !== c.before.method
+      )
+        throw new Error('学习总结与会话不匹配');
+      await replica.commit([
+        {
+          collection: 'sessions',
+          id: c.before.id,
+          before: c.before,
+          after: { ...c.before, status: 'saved' },
+        },
+        { collection: 'records', id: c.record.id, after: c.record },
+      ]);
+    } else if (c.type === 'resolve') {
+      if (c.record)
+        await replica.commit([{ collection: 'records', id: c.record.id, after: c.record }]);
+      await this.store.update((raw) => {
+        const state = (raw as StudyLocal).study;
+        state?.conflicts
+          .filter((f) => c.ids.includes(f.operation.id))
+          .forEach((f) => {
+            f.resolved = true;
+          });
+      });
+    }
+    await this.syncStudy();
   }
   private async performSync(force = false) {
     if (!this.cloud || !this.engine) return;
@@ -710,6 +932,7 @@ export class TaskClient {
           user_id: z.uuid(),
           files: z.array(fileSchema).max(5000).default([]),
           catalog: catalogSchema.optional(),
+          study: studyStateSchema.optional(),
         }),
       })
       .parse(input);
@@ -724,6 +947,29 @@ export class TaskClient {
       const state = s as typeof s & { restored?: string[] };
       if (state.restored?.includes(fingerprint)) throw new Error('这份备份已经恢复过');
       const target = s as LocalState & { files?: LibraryFile[]; filesDirty?: string[] };
+      if (extra.state.study) {
+        const restored = validateStudy(projectStudy(extra.state.study));
+        const study = ((s as StudyLocal).study ??= emptyStudy()),
+          current = projectStudy(study);
+        const changes = (Object.keys(restored) as Collection[]).flatMap((collection) =>
+          Object.entries(restored[collection])
+            .filter(([id]) => !current[collection][id])
+            .map(([id, after]) => ({ collection, id, before: null, after })),
+        );
+        if (changes.length) {
+          const operation = { id: crypto.randomUUID(), at: new Date().toISOString(), changes };
+          validateStudy(applyChanges(current, operation));
+          for (let offset = 0; offset < changes.length; offset += 500)
+            study.pending.push({
+              ...operation,
+              id: crypto.randomUUID(),
+              changes: changes.slice(offset, offset + 500),
+            });
+        }
+        for (const conflict of extra.state.study.conflicts)
+          if (!study.conflicts.some((c) => c.operation.id === conflict.operation.id))
+            study.conflicts.push(conflict);
+      }
       if (extra.state.catalog) {
         target.catalog ??= catalogSchema.parse({});
         for (const course of extra.state.catalog.courses) {
@@ -820,6 +1066,7 @@ export class TaskClient {
   async logout() {
     if ((await this.store.read()).pending.length) throw new Error('请先同步或导出未同步任务');
     this.stopListen?.();
+    this.stopStudyListen?.();
     await this.cloud?.auth.signOut();
     this.engine = null;
     this.email = null;
@@ -829,6 +1076,7 @@ export type Snapshot = Awaited<ReturnType<TaskClient['snapshot']>>;
 export type ClientApi = Pick<
   TaskClient,
   | 'snapshot'
+  | 'study'
   | 'lecture'
   | 'revision'
   | 'saveFile'

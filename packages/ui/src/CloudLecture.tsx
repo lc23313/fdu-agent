@@ -66,6 +66,7 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
     [jobs, setJobs] = useState<Job[]>([]),
     [selected, setSelected] = useState<Job | null>(null),
     [versions, setVersions] = useState<Version[]>([]),
+    [versionId, setVersionId] = useState(''),
     [text, setText] = useState(''),
     [title, setTitle] = useState(''),
     [liveEnabled, setLiveEnabled] = useState(false),
@@ -94,7 +95,6 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
   selectedRef.current = selected;
   const editRef = useRef(false),
     captureKey = useRef(''),
-    loadedRef = useRef(''),
     saveKey = useRef(crypto.randomUUID()),
     uploadKeys = useRef(new Map<string, string>());
   const space = snapshot.projectUrl + '#' + snapshot.ownerId;
@@ -116,8 +116,8 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
     selectedRef.current = job;
     setSelected(job);
     setVersions(rows);
+    setVersionId(rows[0]?.id || '');
     setText(rows[0]?.text || '');
-    loadedRef.current = job.id;
     editRef.current = false;
     saveKey.current = crypto.randomUUID();
   };
@@ -130,6 +130,7 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
       setNotice(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setProgress('');
     }
   };
   useEffect(() => {
@@ -141,6 +142,7 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
       if (document.hidden || !snapshot.connected || !navigator.onLine) return;
       try {
         const current = selectedRef.current;
+        if (!current || !['PENDING', 'RUNNING', 'SUBMITTING'].includes(current.status)) return;
         if (current && ['PENDING', 'RUNNING', 'SUBMITTING'].includes(current.status)) {
           const next = await call<Job>({ action: 'poll', id: current.id });
           if (selectedRef.current?.id !== current.id) return;
@@ -150,6 +152,7 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
             const rows = await call<Version[]>({ action: 'versions', id: next.id });
             if (selectedRef.current?.id === next.id) {
               setVersions(rows);
+              setVersionId(rows[0]?.id || '');
               setText(rows[0]?.text || '');
             }
           }
@@ -282,7 +285,13 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
       const meta: Recording = {
         id: crypto.randomUUID(),
         title: title.trim() || '现场讲座',
-        name: 'lecture.' + (media.mimeType.includes('mp4') ? 'm4a' : 'webm'),
+        name:
+          'lecture.' +
+          (media.mimeType.includes('mp4')
+            ? 'm4a'
+            : media.mimeType.includes('ogg')
+              ? 'ogg'
+              : 'webm'),
         mime: media.mimeType,
         created: new Date().toISOString(),
         state: 'recording',
@@ -603,8 +612,10 @@ export function CloudLecture({ api, snapshot }: { api: ClientApi; snapshot: Snap
           稿件版本
           <select
             aria-label="讲座稿件版本"
+            value={versionId}
             onChange={(e) => {
               if (editRef.current && !confirm('丢弃未保存编辑并切换版本？')) return;
+              setVersionId(e.target.value);
               setText(versions.find((v) => v.id === e.target.value)?.text || '');
               editRef.current = false;
               saveKey.current = crypto.randomUUID();

@@ -1,0 +1,185 @@
+.fdu-app {
+  --fdu-line: #c6d1c7;
+  --fdu-dim: #596b5e;
+  --fdu-control-line: #788d7e;
+  --fdu-control: #edf2ec;
+  --fdu-control-hover: #dce8dc;
+  --fdu-field: #f1f5ef;
+  --fdu-disabled: #e3e8e2;
+  --fdu-disabled-ink: #58685d;
+  --fdu-action-ink: #ffffff;
+}
+html.dark .fdu-app {
+  --fdu-line: #4b6253;
+  --fdu-control-line: #91a795;
+  --fdu-control: #354b3e;
+  --fdu-control-hover: #45614d;
+  --fdu-field: #293e31;
+  --fdu-disabled: #2d3b32;
+  --fdu-disabled-ink: #aab7aa;
+  --fdu-action-ink: #182b1e;
+}
+.fdu-app button:where(:not(.fdu-native *)) {
+  background: var(--fdu-control);
+  border-color: var(--fdu-control-line);
+}
+.fdu-app input:where(:not(.fdu-native *))::placeholder,
+.fdu-app textarea:where(:not(.fdu-native *))::placeholder {
+  color: var(--fdu-dim);
+  opacity: 1;
+}
+.fdu-app button:where(:not(.fdu-native *)):hover:not(:disabled) {
+  background: var(--fdu-control-hover);
+  border-color: var(--fdu-accent);
+}
+.fdu-app
+  :is(input:not([type='checkbox']):not([type='radio']), select, textarea):where(
+    :not(.fdu-native *)
+  ) {
+  background: var(--fdu-field);
+  border-color: var(--fdu-control-line);
+}
+.fdu-app :is(input, select, textarea):where(:not(.fdu-native *)):focus-visible {
+  border-color: var(--fdu-accent);
+  outline: 2px solid var(--fdu-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fdu-accent) 13%, transparent);
+}
+.fdu-app :is(.quick-add, label.task-search, .ai-chat form.ai-composer) {
+  border: 1px solid var(--fdu-control-line);
+  background: var(--fdu-field);
+}
+.fdu-app :is(.quick-add, .task-search, .ai-composer) :is(input, textarea) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.fdu-app
+  :is(
+    .quick-detail,
+    .today-progress button,
+    .sync-line button,
+    .list-heading select,
+    .editor-add-note,
+    .editor-actions > button:not(.primary),
+    .plan-inbox-entry,
+    .plan-inbox .list-heading button,
+    .recycle-entry
+  ) {
+  border: 1px solid var(--fdu-control-line);
+  background: var(--fdu-control);
+  color: var(--fdu-ink);
+  padding: 7px 10px;
+}
+.fdu-app
+  :is(.view-tabs, .study-nav, .study-days, .seven-days, .date-shortcuts, .lecture-jobs)
+  button {
+  border: 1px solid var(--fdu-control-line);
+  background: var(--fdu-control);
+}
+.fdu-app
+  :is(.view-tabs, .study-nav, .study-days, .seven-days, .date-shortcuts, .lecture-jobs)
+  button:is(.selected, [aria-current='page'], [aria-pressed='true']),
+.fdu-app .time-editor > .view-tabs button.selected {
+  background: var(--fdu-accent) !important;
+  color: var(--fdu-action-ink);
+  border-color: var(--fdu-accent) !important;
+  font-weight: 600;
+}
+.fdu-app button.primary:where(:not(.fdu-native *)),
+.fdu-app button.primary:where(:not(.fdu-native *)):hover {
+  background: var(--fdu-accent);
+  border-color: var(--fdu-accent);
+  color: var(--fdu-action-ink);
+  box-shadow: 0 1px 3px #10251b26;
+}
+.fdu-app button.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.fdu-app button:where(:not(.fdu-native *)):disabled,
+.fdu-app button.primary:disabled {
+  opacity: 1;
+  background: var(--fdu-disabled);
+  color: var(--fdu-disabled-ink);
+  border: 1px dashed var(--fdu-control-line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.fdu-app :is(input, select, textarea):where(:not(.fdu-native *)):disabled {
+  opacity: 1;
+  background: var(--fdu-disabled);
+  color: var(--fdu-disabled-ink);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+.fdu-app details > summary:where(:not(.fdu-native *)) {
+  cursor: pointer;
+  padding: 9px 12px;
+  border: 1px solid var(--fdu-control-line);
+  border-radius: 8px;
+  background: var(--fdu-control);
+  color: var(--fdu-ink);
+  min-height: 40px;
+}
+.fdu-app details > summary:hover:where(:not(.fdu-native *)) {
+  background: var(--fdu-control-hover);
+}
+.fdu-app details[open] > summary:where(:not(.fdu-native *)) {
+  border-color: var(--fdu-accent);
+  font-weight: 600;
+}
+.fdu-app details > summary:focus-visible:where(:not(.fdu-native *)) {
+  outline: 2px solid var(--fdu-accent);
+  outline-offset: 2px;
+}
+.fdu-app input[type='file']::file-selector-button {
+  border: 1px solid var(--fdu-accent);
+  border-radius: 7px;
+  padding: 7px 12px;
+  margin-right: 12px;
+  background: var(--fdu-accent);
+  color: var(--fdu-action-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fdu-app input[type='file']:disabled::file-selector-button {
+  background: var(--fdu-disabled);
+  color: var(--fdu-disabled-ink);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+.fdu-app input::-webkit-calendar-picker-indicator {
+  padding: 4px;
+  border-radius: 4px;
+  background-color: var(--fdu-control);
+  cursor: pointer;
+}
+.fdu-app button.study-entry {
+  background: var(--fdu-wash);
+  border-color: var(--fdu-accent);
+}
+.fdu-app .study-shortcuts button,
+.fdu-app .course-list > button {
+  border-color: var(--fdu-control-line);
+  background: var(--fdu-control);
+}
+.fdu-app .file-row > button:first-child {
+  border: 1px solid var(--fdu-control-line);
+  background: var(--fdu-control);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+.fdu-app input:is([type='checkbox'], [type='radio']):where(:not(.fdu-native *)) {
+  border-color: var(--fdu-control-line);
+  accent-color: var(--fdu-accent);
+}
+.fdu-app .settings-modal > .detail-heading {
+  background: var(--fdu-paper);
+  border-bottom-color: var(--fdu-control-line);
+}
+.fdu-app .settings-modal .detail-heading > button {
+  border: 1px solid var(--fdu-control-line);
+  background: var(--fdu-control);
+  color: var(--fdu-ink);
+}

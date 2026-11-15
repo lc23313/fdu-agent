@@ -1274,3 +1274,6 @@ html.dark .fdu-app .task-date.overdue {
 .cloud-lecture textarea {
   width: 100%;
 }
+.cloud-lecture > .view-tabs > .checkbox-label {
+  flex: 1 0 100%;
+}
